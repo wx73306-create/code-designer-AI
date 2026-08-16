@@ -1,0 +1,1196 @@
+@import url('https://fonts.loli.net/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./shadcn-theme.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ===================================================================
+   Code Designer AI — Apple-style Light Theme
+   =================================================================== */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-display);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ===================================================================
+   Light Theme Variables
+   =================================================================== */
+
+:root {
+  /* Font stacks — Inter for display, system fallbacks */
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-geist-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-geist-mono: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Core palette — Apple Light */
+  --background: #ffffff;
+  --foreground: #1d1d1f;
+
+  /* Primary — Apple Blue */
+  --primary: #0071e3;
+  --primary-foreground: #ffffff;
+
+  /* Secondary */
+  --secondary: #f5f5f7;
+  --secondary-foreground: #1d1d1f;
+
+  /* Accent */
+  --accent: #f0f1ff;
+  --accent-foreground: #1d1d1f;
+
+  /* Muted */
+  --muted: #f5f5f7;
+  --muted-foreground: #86868b;
+
+  /* Card */
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+
+  /* Popover */
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+
+  /* Borders */
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.1);
+  --ring: #0071e3;
+
+  /* Destructive */
+  --destructive: #ff3b30;
+
+  /* Charts */
+  --chart-1: #0071e3;
+  --chart-2: #34c759;
+  --chart-3: #af52de;
+  --chart-4: #ff9500;
+  --chart-5: #ff3b30;
+
+  /* Radius */
+  --radius: 0.625rem;
+
+  /* Sidebar */
+  --sidebar: #f9f9fb;
+  --sidebar-foreground: #1d1d1f;
+  --sidebar-primary: #0071e3;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f0f1ff;
+  --sidebar-accent-foreground: #1d1d1f;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+  --sidebar-ring: #0071e3;
+
+  /* Custom Design Tokens */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-blur: 24px;
+
+  --glow-blue: 0 0 20px rgba(0, 113, 227, 0.15);
+  --glow-green: 0 0 20px rgba(52, 199, 89, 0.15);
+  --glow-purple: 0 0 20px rgba(175, 82, 222, 0.15);
+
+  --agent-browser: #0071e3;
+  --agent-vision: #af52de;
+  --agent-planning: #ff9500;
+  --agent-code: #34c759;
+  --agent-qa: #ff3b30;
+  --agent-deploy: #0a84ff;
+
+  --transition-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ===================================================================
+   Base Layer
+   =================================================================== */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(0, 113, 227, 0.2);
+    color: #1d1d1f;
+  }
+}
+
+/* ===================================================================
+   Custom Scrollbar — Light
+   =================================================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* ===================================================================
+   Animated Gradient Backgrounds — Hero Section
+   =================================================================== */
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes gradient-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.hero-gradient {
+  background:
+    radial-gradient(ellipse 140% 90% at 15% 10%, rgba(0, 113, 227, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 80% at 85% 12%, rgba(175, 82, 222, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 110% 70% at 45% 88%, rgba(52, 199, 89, 0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 130% 90% at 75% 55%, rgba(255, 149, 0, 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse 100% 80% at 30% 65%, rgba(88, 86, 214, 0.04) 0%, transparent 55%),
+    linear-gradient(135deg, rgba(0, 113, 227, 0.04) 0%, rgba(191, 90, 242, 0.03) 25%, transparent 50%, rgba(48, 209, 88, 0.03) 75%, rgba(0, 113, 227, 0.04) 100%);
+  background-size: 400% 400%, 400% 400%, 400% 400%, 400% 400%, 400% 400%, 500% 500%;
+  animation: aurora-flow 24s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: background-position;
+}
+
+.hero-radial {
+  background: radial-gradient(
+    ellipse 80% 60% at 50% -20%,
+    rgba(0, 113, 227, 0.10) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+}
+
+/* Mouse-following glow — smooth, large, responsive */
+.hero-mouse-glow {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.6s ease, background 0.15s ease;
+  will-change: background, opacity;
+}
+
+.hero-mouse-glow.active {
+  opacity: 1;
+}
+
+@keyframes aurora-flow {
+  0%, 100% {
+    background-position: 0% 50%, 100% 30%, 50% 80%, 30% 60%, 70% 40%, 0% 50%;
+  }
+  16% {
+    background-position: 20% 30%, 80% 50%, 70% 50%, 50% 70%, 40% 70%, 30% 80%;
+  }
+  33% {
+    background-position: 50% 20%, 50% 70%, 90% 30%, 70% 40%, 20% 50%, 60% 30%;
+  }
+  50% {
+    background-position: 100% 50%, 0% 70%, 20% 60%, 80% 30%, 50% 80%, 100% 50%;
+  }
+  66% {
+    background-position: 70% 80%, 30% 30%, 50% 90%, 30% 60%, 80% 30%, 70% 70%;
+  }
+  83% {
+    background-position: 30% 60%, 70% 50%, 80% 40%, 60% 80%, 60% 60%, 40% 20%;
+  }
+}
+
+/* ===================================================================
+   Volumetric Light Rays — Soft sunlight through premium glass
+   =================================================================== */
+
+.light-ray {
+  position: absolute;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  will-change: transform, opacity;
+}
+
+.light-ray-1 {
+  width: 300px;
+  height: 120%;
+  top: -10%;
+  left: 15%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 30%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 70%,
+    transparent 100%
+  );
+  transform: rotate(-15deg);
+  animation: ray-drift-1 20s ease-in-out infinite;
+}
+
+.light-ray-2 {
+  width: 200px;
+  height: 120%;
+  top: -10%;
+  right: 25%;
+  background: linear-gradient(
+    95deg,
+    transparent 0%,
+    rgba(200, 220, 255, 0.03) 35%,
+    rgba(200, 220, 255, 0.06) 50%,
+    rgba(200, 220, 255, 0.03) 65%,
+    transparent 100%
+  );
+  transform: rotate(10deg);
+  animation: ray-drift-2 25s ease-in-out infinite;
+}
+
+.light-ray-3 {
+  width: 150px;
+  height: 110%;
+  top: -5%;
+  left: 55%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 240, 220, 0.03) 40%,
+    rgba(255, 240, 220, 0.05) 50%,
+    rgba(255, 240, 220, 0.03) 60%,
+    transparent 100%
+  );
+  transform: rotate(-5deg);
+  animation: ray-drift-3 22s ease-in-out infinite;
+}
+
+@keyframes ray-drift-1 {
+  0%, 100% { transform: rotate(-15deg) translateX(0); opacity: 0.6; }
+  50% { transform: rotate(-12deg) translateX(80px); opacity: 1; }
+}
+
+@keyframes ray-drift-2 {
+  0%, 100% { transform: rotate(10deg) translateX(0); opacity: 0.5; }
+  50% { transform: rotate(8deg) translateX(-60px); opacity: 0.9; }
+}
+
+@keyframes ray-drift-3 {
+  0%, 100% { transform: rotate(-5deg) translateX(0); opacity: 0.4; }
+  50% { transform: rotate(-3deg) translateX(50px); opacity: 0.8; }
+}
+
+/* ===================================================================
+   Glass Grain Overlay — Micro texture on glass surfaces
+   =================================================================== */
+
+.grain-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  z-index: 4;
+}
+
+.mesh-gradient {
+  background:
+    radial-gradient(at 20% 30%, rgba(0, 113, 227, 0.05) 0%, transparent 50%),
+    radial-gradient(at 80% 20%, rgba(191, 90, 242, 0.03) 0%, transparent 50%),
+    radial-gradient(at 50% 80%, rgba(48, 209, 88, 0.03) 0%, transparent 50%);
+  background-size: 200% 200%;
+  animation: gradient-shift 20s ease infinite;
+}
+
+.section-divider {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.08) 50%,
+    transparent 100%
+  );
+}
+
+/* ===================================================================
+   Glass Morphism Utility Classes — Light Theme
+   =================================================================== */
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.glass-premium {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+.glass-hover {
+  transition: all 0.3s var(--transition-smooth);
+}
+
+.glass-hover:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+/* ===================================================================
+   Agent Status Indicator Styles
+   =================================================================== */
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes badge-bg-pulse {
+  0%, 100% {
+    background-color: rgba(0, 113, 227, 0.06);
+  }
+  50% {
+    background-color: rgba(0, 113, 227, 0.12);
+  }
+}
+
+.badge-running-pulse {
+  animation: badge-bg-pulse 2s ease-in-out infinite;
+}
+
+.agent-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.agent-indicator__dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+}
+
+.agent-indicator__dot--idle {
+  background: #c7c7cc;
+}
+
+.agent-indicator__dot--running {
+  background: var(--primary);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.agent-indicator__dot--running::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: var(--primary);
+  opacity: 0.3;
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+.agent-indicator__dot--completed {
+  background: #34c759;
+}
+
+.agent-indicator__dot--error {
+  background: #ff3b30;
+}
+
+/* Agent-specific colors */
+.agent-browser { --agent-color: var(--agent-browser); }
+.agent-vision { --agent-color: var(--agent-vision); }
+.agent-planning { --agent-color: var(--agent-planning); }
+.agent-code { --agent-color: var(--agent-code); }
+.agent-qa { --agent-color: var(--agent-qa); }
+.agent-deploy { --agent-color: var(--agent-deploy); }
+
+.agent-indicator__dot--running.agent-browser { background: var(--agent-browser); }
+.agent-indicator__dot--running.agent-browser::before { background: var(--agent-browser); }
+.agent-indicator__dot--running.agent-vision { background: var(--agent-vision); }
+.agent-indicator__dot--running.agent-vision::before { background: var(--agent-vision); }
+.agent-indicator__dot--running.agent-planning { background: var(--agent-planning); }
+.agent-indicator__dot--running.agent-planning::before { background: var(--agent-planning); }
+.agent-indicator__dot--running.agent-code { background: var(--agent-code); }
+.agent-indicator__dot--running.agent-code::before { background: var(--agent-code); }
+.agent-indicator__dot--running.agent-qa { background: var(--agent-qa); }
+.agent-indicator__dot--running.agent-qa::before { background: var(--agent-qa); }
+.agent-indicator__dot--running.agent-deploy { background: var(--agent-deploy); }
+.agent-indicator__dot--running.agent-deploy::before { background: var(--agent-deploy); }
+
+/* ===================================================================
+   Progress Bar Animations
+   =================================================================== */
+
+@keyframes progress-fill {
+  from {
+    width: 0%;
+  }
+}
+
+@keyframes progress-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(0, 113, 227, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(0, 113, 227, 0.5);
+  }
+}
+
+@keyframes progress-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.progress-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.progress-bar__fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.6s var(--transition-smooth);
+  animation: progress-fill 0.8s var(--transition-smooth);
+}
+
+.progress-bar__fill--complete {
+  animation:
+    progress-fill 0.8s var(--transition-smooth),
+    progress-glow 2s ease-in-out infinite;
+}
+
+.progress-bar__shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  animation: progress-shimmer 2s ease-in-out infinite;
+}
+
+/* ===================================================================
+   Code Block — Syntax Highlighting (Light Theme)
+   =================================================================== */
+
+.code-block {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.8;
+  tab-size: 2;
+}
+
+.code-block .line-number {
+  display: inline-block;
+  width: 2.5rem;
+  text-align: right;
+  padding-right: 1rem;
+  color: rgba(0, 0, 0, 0.25);
+  user-select: none;
+}
+
+/* Syntax token colors (Light Xcode-inspired) */
+.code-block .token-keyword { color: #ad3da4; }
+.code-block .token-string { color: #d12f29; }
+.code-block .token-number { color: #272ad8; }
+.code-block .token-comment { color: #8e8e93; font-style: italic; }
+.code-block .token-function { color: #326d74; }
+.code-block .token-tag { color: #ad3da4; }
+.code-block .token-attr-name { color: #4b21b0; }
+.code-block .token-attr-value { color: #d12f29; }
+.code-block .token-punctuation { color: #6c6c70; }
+.code-block .token-operator { color: #6c6c70; }
+.code-block .token-builtin { color: #4b21b0; }
+.code-block .token-class { color: #4b21b0; }
+.code-block .token-property { color: #326d74; }
+
+/* ===================================================================
+   Responsive Utilities
+   =================================================================== */
+
+@layer utilities {
+  .container-responsive {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .truncate-2-lines {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+/* ===================================================================
+   Utility Animations
+   =================================================================== */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out;
+}
+
+/* ===================================================================
+   Gradient Text Utilities — Light Theme
+   =================================================================== */
+
+.gradient-text-primary {
+  background: linear-gradient(180deg, #1d1d1f 0%, #0071e3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-accent {
+  background: linear-gradient(135deg, #af52de 0%, #0071e3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ===================================================================
+   Section Glow & Noise Overlay — Light
+   =================================================================== */
+
+.section-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 60% 40% at 50% 0%,
+    rgba(0, 113, 227, 0.04) 0%,
+    transparent 70%
+  );
+}
+
+.noise-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+
+/* ===================================================================
+   Apple Liquid Glass — iOS-style Frosted Glass System
+   =================================================================== */
+
+.glass-liquid {
+  position: relative;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(40px) saturate(2);
+  -webkit-backdrop-filter: blur(40px) saturate(2);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -0.5px 0 rgba(0, 0, 0, 0.03),
+    inset 0 0 20px rgba(255, 255, 255, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.4s ease, border-color 0.3s ease;
+}
+
+/* Glass grain micro-texture overlay */
+.glass-liquid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  z-index: 1;
+}
+
+.glass-liquid:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -0.5px 0 rgba(0, 0, 0, 0.04),
+    inset 0 0 30px rgba(255, 255, 255, 0.2),
+    0 4px 16px rgba(0, 0, 0, 0.06),
+    0 12px 40px rgba(0, 0, 0, 0.06);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Small pill variant — tags, badges */
+.glass-liquid-pill {
+  background: rgba(255, 255, 255, 0.48);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.6),
+    0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+}
+
+.glass-liquid-pill:hover {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.7),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* ===================================================================
+   Liquid Glass Button — Apple Vision Pro 风格按键交互
+   玻璃质感 + 内高光 + 悬浮光泽扫过 + 按压反馈。
+   注意：不在 hover/active 使用 transform（缩放交给 Framer Motion 的
+   whileHover/whileTap），此处只动 box-shadow / filter / 光泽伪元素。
+   =================================================================== */
+
+.liquid-glass-btn {
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.5),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.08),
+    0 4px 16px rgba(0, 0, 0, 0.12);
+  transition: box-shadow 0.3s ease, filter 0.3s ease;
+}
+
+.liquid-glass-btn:hover {
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.65),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.08),
+    0 8px 30px rgba(0, 0, 0, 0.18);
+  filter: brightness(1.06) saturate(1.12);
+}
+
+.liquid-glass-btn:active {
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.16),
+    0 2px 8px rgba(0, 0, 0, 0.1);
+  filter: brightness(0.96);
+}
+
+/* 悬浮时的高光扫过（specular sheen sweep） */
+.liquid-glass-btn::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+
+.liquid-glass-btn:hover::after {
+  left: 145%;
+}
+
+/* 浅色玻璃按键（用于次要按键/标签，半透明白底） */
+.liquid-glass-btn-soft {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(16px) saturate(1.6);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    0 2px 10px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.3s ease, background 0.3s ease, filter 0.3s ease;
+}
+
+.liquid-glass-btn-soft:hover {
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.7),
+    0 6px 20px rgba(0, 0, 0, 0.1);
+  filter: brightness(1.03);
+}
+
+.liquid-glass-btn-soft:active {
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.1),
+    0 1px 4px rgba(0, 0, 0, 0.08);
+  filter: brightness(0.98);
+}
+
+/* ===================================================================
+   Dynamic Liquid Background — Morphing Blobs + Mouse Parallax
+   Apple Vision Pro / iOS Liquid Glass 液态背景系统
+   =================================================================== */
+
+.liquid-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 视差包装层：transform 由 JS 通过 --lx/--ly 驱动（跟随鼠标） */
+.liquid-parallax {
+  position: absolute;
+  inset: -10%;
+  transform: translate3d(var(--lx, 0px), var(--ly, 0px), 0);
+  transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  will-change: transform;
+}
+
+/* 液态 Blob 基础：重度模糊 + 变形 + 漂浮 */
+.liquid-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  will-change: transform, border-radius;
+  mix-blend-mode: multiply;
+}
+
+.liquid-blob-1 {
+  width: 560px;
+  height: 560px;
+  top: -120px;
+  left: -80px;
+  opacity: 0.5;
+  background: linear-gradient(135deg, #7dd3fc 0%, #818cf8 100%);
+  animation:
+    liquid-morph 14s ease-in-out infinite,
+    liquid-float-1 20s ease-in-out infinite;
+}
+
+.liquid-blob-2 {
+  width: 480px;
+  height: 480px;
+  bottom: -100px;
+  right: -60px;
+  opacity: 0.45;
+  background: linear-gradient(135deg, #c084fc 0%, #60a5fa 100%);
+  animation:
+    liquid-morph 16s ease-in-out infinite reverse,
+    liquid-float-2 24s ease-in-out infinite;
+}
+
+.liquid-blob-3 {
+  width: 380px;
+  height: 380px;
+  top: 35%;
+  left: 45%;
+  opacity: 0.35;
+  background: linear-gradient(135deg, #a5b4fc 0%, #67e8f9 100%);
+  animation:
+    liquid-morph 18s ease-in-out infinite,
+    liquid-float-3 22s ease-in-out infinite;
+}
+
+/* 液态噪点纹理 */
+.liquid-noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+}
+
+/* 有机变形——模拟液态表面张力 */
+@keyframes liquid-morph {
+  0%, 100% { border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%; }
+  25% { border-radius: 58% 42% 37% 63% / 56% 59% 41% 44%; }
+  50% { border-radius: 37% 63% 58% 42% / 59% 41% 44% 56%; }
+  75% { border-radius: 63% 37% 42% 58% / 44% 56% 59% 41%; }
+}
+
+/* 三个 Blob 各自不同的漂浮轨迹，错开节奏更自然 */
+@keyframes liquid-float-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(70px, 50px) scale(1.08); }
+}
+@keyframes liquid-float-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-60px, -40px) scale(1.1); }
+}
+@keyframes liquid-float-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(50px, -60px) scale(0.94); }
+}
+
+/* 滚动时冻结液态背景（性能保护，配合 .is-scrolling） */
+.is-scrolling .liquid-blob {
+  animation-play-state: paused !important;
+}
+.is-scrolling .liquid-parallax {
+  transition: none !important;
+}
+
+/* ===================================================================
+   Aura-Inspired Background Effects — Light Theme Adaptation
+   =================================================================== */
+
+/* Full-page SVG grain/noise texture overlay */
+.grain-overlay-fixed {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 300px 300px;
+}
+
+/* Hero section video background — subtle movement behind gradient */
+.hero-video-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.08;
+  filter: saturate(0.4) blur(1px) brightness(1.2);
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* Light wash overlay to maintain light theme over video */
+.hero-video-wash {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(245, 245, 247, 0.65) 0%,
+    rgba(245, 245, 247, 0.50) 40%,
+    rgba(245, 245, 247, 0.70) 100%
+  );
+  pointer-events: none;
+}
+
+/* Vertical guide lines at container edges — premium structural element */
+.guide-line {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.06;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    #0071E3 15%,
+    #0071E3 85%,
+    transparent 100%
+  );
+}
+.guide-line-left {
+  left: calc(50% - 36rem);
+}
+.guide-line-right {
+  left: calc(50% + 36rem);
+}
+
+/* Shiny gradient sweep animation for text */
+@keyframes shiny-sweep {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.animate-shiny {
+  background-size: 200% auto;
+  animation: shiny-sweep 6s linear infinite;
+}
+
+/* Shiny text gradient style — used on title span */
+.shiny-text {
+  background-image: linear-gradient(
+    to right,
+    #1d1d1f 0%,
+    #0B2551 12.5%,
+    #0071E3 32.5%,
+    #00d2ff 50%,
+    #0B2551 67.5%,
+    #1d1d1f 87.5%,
+    #1d1d1f 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: shiny-sweep 6s linear infinite;
+}
+
+/* Ambient glow behind hero content */
+.hero-ambient-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(800px ellipse at 30% 20%, rgba(0, 113, 227, 0.04), transparent 60%),
+    radial-gradient(600px ellipse at 70% 80%, rgba(175, 82, 222, 0.03), transparent 60%),
+    radial-gradient(500px ellipse at 50% 50%, rgba(255, 149, 0, 0.02), transparent 50%);
+}
+
+/* Section grain overlay (non-fixed, per-section) */
+.section-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  mix-blend-mode: multiply;
+}
+
+/* ===================================================================
+   Scroll Performance Optimizations
+   =================================================================== */
+
+/* GPU-accelerated smooth scrolling */
+.scroll-smooth {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Off-screen sections skip rendering until scrolled into view */
+section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}
+
+/* Hero section always visible */
+#hero-section {
+  content-visibility: visible;
+}
+
+/* Promote scrolling container to its own compositing layer.
+   注意：不能用 transform: translateZ(0) —— 它会给落地页容器设定固定 transform 值，
+   与 framer-motion 退场动画(scale)冲突，导致 AnimatePresence mode="wait" 卡死、工作台无法挂载。
+   改用 will-change 提示合成，不设定具体 transform 值。 */
+.h-screen.overflow-y-auto {
+  will-change: scroll-position, transform;
+}
+
+/* ===================================================================
+   Scroll Jank Prevention — pause heavy effects during scroll
+   =================================================================== */
+
+/* When scrolling, freeze all Framer Motion / CSS animations */
+.is-scrolling * {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
+/* Hide glass particles during scroll (biggest GPU drain) */
+.is-scrolling .pointer-events-none.absolute.inset-0 {
+  opacity: 0 !important;
+}
+
+/* Simplify backdrop-filter during scroll */
+.is-scrolling .glass-liquid,
+.is-scrolling .glass-liquid-pill {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Disable grain overlays during scroll */
+.is-scrolling .grain-overlay,
+.is-scrolling .grain-overlay-fixed,
+.is-scrolling .section-grain {
+  opacity: 0 !important;
+}
+
+/* Simplify floating orbs during scroll */
+.is-scrolling .pointer-events-none.absolute[class*="rounded-full"] {
+  opacity: 0 !important;
+}
+
+/* Disable light rays during scroll */
+.is-scrolling .light-ray {
+  opacity: 0 !important;
+}
+
+/* Disable mouse glow during scroll */
+.is-scrolling .hero-mouse-glow {
+  opacity: 0 !important;
+}

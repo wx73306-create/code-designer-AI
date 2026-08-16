@@ -1,0 +1,59 @@
+{
+  "name": "Linear",
+  "style": "dark-precision",
+  "description": "Linear's design language: dark mode first, precise borders, subtle glows, developer-tool aesthetic",
+  "colors": {
+    "primary": "#5E6AD2",
+    "secondary": "#8B8D98",
+    "accent": "#F47067",
+    "background": "#0E0E10",
+    "surface": "#1C1C1F",
+    "surface-elevated": "#262629",
+    "text-primary": "#F4F4F5",
+    "text-secondary": "#8B8D98",
+    "border": "rgba(255,255,255,0.09)",
+    "glow": "rgba(94,106,210,0.15)"
+  },
+  "typography": {
+    "heading": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    "body": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    "headingWeight": "600",
+    "bodyWeight": "400",
+    "headingSizes": ["40px", "32px", "24px", "20px", "16px"],
+    "bodySizes": ["15px", "14px", "13px", "12px"],
+    "lineHeight": "1.5"
+  },
+  "spacing": {
+    "base": "4px",
+    "scale": ["2px", "4px", "8px", "12px", "16px", "24px", "32px", "48px"],
+    "containerMaxWidth": "1200px",
+    "sectionPadding": "64px 0",
+    "cardPadding": "16px"
+  },
+  "layout": {
+    "grid": "flex-based",
+    "gap": "16px",
+    "breakpoints": { "sm": "640px", "md": "768px", "lg": "1024px" },
+    "centered": false
+  },
+  "components": {
+    "borderRadius": "6px",
+    "borderRadiusLg": "12px",
+    "shadow": "0 0 0 1px rgba(255,255,255,0.06), 0 2px 4px rgba(0,0,0,0.2)",
+    "shadowHover": "0 0 0 1px rgba(94,106,210,0.3), 0 4px 12px rgba(0,0,0,0.3)",
+    "navHeight": "48px",
+    "navBg": "rgba(14,14,16,0.8)",
+    "navBlur": "blur(12px)",
+    "buttonRadius": "6px",
+    "buttonPadding": "8px 16px",
+    "inputRadius": "6px"
+  },
+  "animation": {
+    "style": "subtle-precise",
+    "duration": "0.15s",
+    "easing": "cubic-bezier(0.2, 0, 0, 1)",
+    "hoverBg": "rgba(255,255,255,0.04)",
+    "entrance": "fade-in",
+    "transition": "all 0.15s cubic-bezier(0.2, 0, 0, 1)"
+  }
+}

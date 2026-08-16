@@ -1,0 +1,443 @@
+// Code Designer AI - Prisma Schema
+// Auth System: User, Account, Session, VerificationToken
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// User & Authentication
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  password      String?   // bcrypt hash (null for OAuth users)
+  image         String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  projects      Project[]
+  quota         Quota?
+  subscription  Subscription?
+  payments      Payment[]
+  admin         Admin?
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+enum Role {
+  USER
+  PRO
+  ENTERPRISE
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expires])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@index([expires])
+}
+
+// ============================================================================
+// Quota & Subscription
+// ============================================================================
+
+model Quota {
+  id      String   @id @default(cuid())
+  userId  String   @unique
+  used    Int      @default(0)
+  limit   Int      @default(2)
+  resetAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([resetAt])
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  plan               Plan               @default(FREE)
+  status             SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAt           DateTime?
+  canceledAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  TRIALING
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  userId        String
+  amount        Int           // in cents
+  currency      String        @default("usd")
+  status        PaymentStatus @default(PENDING)
+  paymentMethod String
+  externalId    String?       // Stripe payment ID
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+// ============================================================================
+// Projects & AI Generation
+// ============================================================================
+
+model Project {
+  id             String        @id @default(cuid())
+  userId         String
+  url            String
+  name           String?
+  status         ProjectStatus @default(PENDING)
+  currentVersion Int           @default(1)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versions Version[]
+  tasks    Task[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum ProjectStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Version {
+  id        String   @id @default(cuid())
+  projectId String
+  version   Int
+  codeMap   Json     // { "src/App.tsx": "...", "src/components/Header.tsx": "..." }
+  analysis  Json     // AI analysis results
+  score     Float?   // QA score
+  createdAt DateTime @default(now())
+
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evaluations  Evaluation[]
+
+  @@unique([projectId, version])
+  @@index([projectId])
+}
+
+model Evaluation {
+  id             String   @id @default(cuid())
+  versionId      String
+  version        Version  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  // Scoring dimensions (0-100)
+  totalScore     Int      @default(0)
+  layoutScore    Int      @default(0)
+  colorScore     Int      @default(0)
+  typographyScore Int     @default(0)
+  spacingScore   Int      @default(0)
+  detailScore    Int      @default(0)
+
+  // Issues found
+  issues         Json     @default("[]")
+  suggestions    Json     @default("[]")
+
+  // Optimization tracking
+  round          Int      @default(1)
+  passed         Boolean  @default(false)
+  targetScore    Int      @default(90)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([versionId])
+  @@index([totalScore])
+  @@map("evaluations")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  projectId   String
+  type        TaskType
+  status      TaskStatus @default(PENDING)
+  input       Json
+  output      Json?
+  error       String?    @db.Text
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  logs    TaskLog[]
+
+  @@index([projectId])
+  @@index([type])
+  @@index([status])
+}
+
+enum TaskType {
+  BROWSER
+  VISION
+  ARCHITECT
+  CODE
+  QA
+  DEPLOY
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model TaskLog {
+  id        String   @id @default(cuid())
+  taskId    String
+  level     LogLevel @default(INFO)
+  message   String   @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([level])
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+// ============================================================================
+// Admin
+// ============================================================================
+
+model Admin {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  permissions Json     // ["users.read", "users.write", "projects.read", ...]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RoleModel {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?  @db.Text
+  permissions Json     // ["users.read", "users.write", ...]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique // "users.read", "users.write", etc.
+  description String?
+  createdAt   DateTime @default(now())
+}
+
+model Announcement {
+  id        String           @id @default(cuid())
+  title     String
+  content   String           @db.Text
+  type      AnnouncementType @default(INFO)
+  isActive  Boolean          @default(true)
+  expiresAt DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([isActive])
+}
+
+enum AnnouncementType {
+  INFO
+  WARNING
+  ERROR
+  SUCCESS
+}
+
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================================================
+// Monitoring & Analytics
+// ============================================================================
+
+model ApiUsage {
+  id         String   @id @default(cuid())
+  endpoint   String
+  method     String
+  statusCode Int
+  latency    Int      // milliseconds
+  userId     String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([endpoint])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model DailyStatistics {
+  id               String   @id @default(cuid())
+  date             DateTime @unique @db.Date
+  totalUsers       Int      @default(0)
+  newUsers         Int      @default(0)
+  totalProjects    Int      @default(0)
+  newProjects      Int      @default(0)
+  totalGenerations Int      @default(0)
+  avgLatency       Float    @default(0)
+  errorCount       Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([date])
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     LogLevel
+  message   String   @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([level])
+}
+
+model ErrorLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  projectId String?
+  error     String   @db.Text
+  stack     String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([projectId])
+}
+
+// ============================================================================
+// Design Memory — AI 设计知识库，积累从网站分析中提取的设计规律
+// ============================================================================
+
+model DesignMemory {
+  id           String   @id @default(cuid())
+  websiteId    String
+  websiteName  String
+  websiteUrl   String
+  category     String?
+
+  // Design system data (extracted patterns, not raw content)
+  style        Json     // { keywords: string[], mood: string }
+  color        Json     // { primary, secondary, background, accent, tokens }
+  typography   Json     // { fontFamily, headingSize, bodySize, weights, lineHeight }
+  layout       Json     // { grid, sections, breakpoints }
+  component    Json     // [{ name, type, priority }]
+  animation    Json     // { scrollAnimation, transition, duration, hover }
+
+  // Metadata
+  sourceReport String?  // ID of the DesignReport this was extracted from
+  confidence   Float    @default(0.8)
+  usageCount   Int      @default(0) // how many times this memory was used in generation
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@index([websiteId])
+  @@index([createdAt])
+  @@map("design_memories")
+}

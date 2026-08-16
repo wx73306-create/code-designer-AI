@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vacheron Constantin - Code Designer AI Preview</title>
+  <style>
+    :root {
+      --primary: #333;
+      --secondary: #776251;
+      --secondary-light: #8d7a6a;
+      --bg: #FFFDFB;
+      --surface: #F0F0F0;
+      --border: rgba(100,100,100,0.1);
+      --text-secondary: rgba(60,60,60,0.5);
+      --shadow: 0 3px 6px rgba(0,0,0,0.15);
+      --font-serif: Georgia, 'Times New Roman', 'Noto Serif SC', serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--font-sans); color: var(--primary); background: var(--bg); -webkit-font-smoothing: antialiased; }
+    a { color: var(--secondary); text-decoration: none; transition: color 0.3s; }
+    a:hover { color: var(--secondary-light); }
+
+    /* ===== Navbar ===== */
+    .navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 80px; background: transparent;
+      transition: background 0.5s, box-shadow 0.5s, backdrop-filter 0.5s;
+    }
+    .navbar.scrolled {
+      background: rgba(255,253,251,0.92);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 1px 0 var(--border);
+    }
+    .nav-inner {
+      max-width: 1280px; margin: 0 auto;
+      height: 100%; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px;
+    }
+    .nav-logo { text-decoration: none; }
+    .nav-logo-main {
+      font-family: var(--font-serif); font-size: 22px; font-weight: 400;
+      letter-spacing: 0.15em; color: var(--primary);
+      transition: color 0.5s;
+    }
+    .navbar:not(.scrolled) .nav-logo-main { color: #fff; }
+    .nav-logo-sub {
+      font-size: 10px; letter-spacing: 0.35em;
+      color: var(--secondary); margin-top: 2px;
+      transition: color 0.5s;
+    }
+    .navbar:not(.scrolled) .nav-logo-sub { color: rgba(255,255,255,0.6); }
+    .nav-links { display: flex; gap: 48px; }
+    .nav-links a {
+      font-size: 13px; font-weight: 400; letter-spacing: 0.1em;
+      color: var(--primary); text-decoration: none;
+      transition: color 0.3s, transform 0.2s;
+      display: inline-block;
+    }
+    .navbar:not(.scrolled) .nav-links a { color: rgba(255,255,255,0.85); }
+    .nav-links a:hover { color: var(--secondary); transform: translateY(-1px); }
+    .navbar:not(.scrolled) .nav-links a:hover { color: #fff; }
+    .nav-actions { display: flex; gap: 16px; }
+    .nav-btn {
+      width: 40px; height: 40px; border: none; background: transparent;
+      border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--primary); transition: color 0.3s, background 0.3s;
+    }
+    .navbar:not(.scrolled) .nav-btn { color: rgba(255,255,255,0.85); }
+    .nav-btn:hover { background: rgba(0,0,0,0.04); }
+    .navbar:not(.scrolled) .nav-btn:hover { background: rgba(255,255,255,0.1); }
+    .nav-btn svg { width: 20px; height: 20px; }
+
+    /* ===== Hero ===== */
+    .hero { position: relative; height: 100vh; overflow: hidden; }
+    .hero-bg {
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #1a1510 0%, #2a231a 30%, #3a3025 50%, #1a1510 100%);
+      transform: scale(1.05);
+      transition: transform 6s ease-out;
+    }
+    .hero-bg.loaded { transform: scale(1); }
+    .hero-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, transparent 30%, transparent 60%, rgba(0,0,0,0.6) 100%);
+    }
+    .hero-content {
+      position: relative; z-index: 2;
+      height: 100%; display: flex; flex-direction: column;
+      justify-content: flex-end; padding: 0 32px 120px;
+      max-width: 1280px; margin: 0 auto;
+    }
+    .hero-text { max-width: 640px; }
+    .hero h1 {
+      font-family: var(--font-serif); font-size: 56px;
+      font-weight: 400; color: #fff; line-height: 1.15;
+      margin-bottom: 16px; letter-spacing: 0.02em;
+      opacity: 0; transform: translateY(40px);
+      animation: heroIn 1s 0.5s forwards cubic-bezier(0.22,1,0.36,1);
+    }
+    .hero .subtitle {
+      font-size: 18px; font-weight: 300; color: rgba(255,255,255,0.75);
+      line-height: 1.7; margin-bottom: 36px;
+      opacity: 0; transform: translateY(40px);
+      animation: heroIn 1s 0.7s forwards cubic-bezier(0.22,1,0.36,1);
+    }
+    @keyframes heroIn { to { opacity: 1; transform: translateY(0); } }
+    .hero-cta {
+      opacity: 0; transform: translateY(30px);
+      animation: heroIn 1s 0.9s forwards cubic-bezier(0.22,1,0.36,1);
+    }
+    .btn-hero {
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 16px 36px;
+      border: 1.5px solid rgba(255,255,255,0.6); background: transparent;
+      color: #fff; font-size: 14px; font-weight: 400;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.5s, color 0.5s, border-color 0.5s, transform 0.15s;
+    }
+    .btn-hero:hover { background: #fff; color: var(--primary); border-color: #fff; transform: scale(1.03); }
+    .btn-hero:active { transform: scale(0.97); }
+    .btn-hero svg { width: 16px; height: 16px; transition: transform 0.3s; }
+    .btn-hero:hover svg { transform: translateX(4px); }
+
+    .scroll-indicator {
+      position: absolute; bottom: 32px; left: 50%;
+      transform: translateX(-50%); z-index: 10;
+      animation: bounce 2.5s ease-in-out infinite;
+    }
+    .scroll-mouse {
+      width: 24px; height: 40px; border: 1.5px solid rgba(255,255,255,0.4);
+      border-radius: 12px; display: flex; justify-content: center;
+    }
+    .scroll-dot {
+      width: 3px; height: 8px; background: rgba(255,255,255,0.7);
+      border-radius: 2px; margin-top: 8px;
+    }
+    @keyframes bounce { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(10px); } }
+
+    /* ===== Feature Section ===== */
+    .feature-section { padding: 100px 32px; }
+    .feature-inner {
+      max-width: 1280px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 80px; align-items: center;
+    }
+    .feature-inner.reverse { direction: rtl; }
+    .feature-inner.reverse > * { direction: ltr; }
+    .feature-media {
+      aspect-ratio: 4/3; overflow: hidden;
+      position: relative;
+    }
+    .feature-media-bg {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .feature-text h2 {
+      font-family: var(--font-serif); font-size: 36px;
+      font-weight: 400; line-height: 1.25;
+      margin-bottom: 20px; color: var(--primary);
+    }
+    .feature-text p {
+      font-size: 17px; font-weight: 300; line-height: 1.8;
+      color: var(--text-secondary); margin-bottom: 28px;
+    }
+    .feature-link {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 14px; letter-spacing: 0.1em;
+      color: var(--secondary); font-weight: 400;
+      transition: gap 0.3s;
+    }
+    .feature-link:hover { gap: 14px; }
+    .feature-link svg { width: 16px; height: 16px; }
+
+    /* ===== Product Grid ===== */
+    .product-section { padding: 100px 32px; background: var(--surface); }
+    .product-section-inner { max-width: 1280px; margin: 0 auto; text-align: center; }
+    .product-section h2 {
+      font-family: var(--font-serif); font-size: 40px;
+      font-weight: 400; margin-bottom: 8px;
+    }
+    .product-section .lead {
+      font-size: 17px; font-weight: 300;
+      color: var(--text-secondary); margin-bottom: 56px;
+    }
+    .product-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px;
+    }
+    .product-card {
+      text-decoration: none; display: block;
+      transition: transform 0.4s cubic-bezier(0.23,1,0.32,1);
+    }
+    .product-card:hover { transform: translateY(-4px); }
+    .product-card-img {
+      position: relative; aspect-ratio: 3/4;
+      background: #e8e6e3; overflow: hidden; margin-bottom: 16px;
+    }
+    .product-card-img-inner {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.7s ease;
+    }
+    .product-card:hover .product-card-img-inner { transform: scale(1.04); }
+    .product-card-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 12px; background: rgba(0,0,0,0);
+      transition: background 0.5s;
+      display: flex; justify-content: center;
+      opacity: 0; transform: translateY(12px);
+      transition: opacity 0.5s, transform 0.5s;
+    }
+    .product-card:hover .product-card-overlay {
+      opacity: 1; transform: translateY(0);
+    }
+    .quick-view-btn {
+      width: 100%; padding: 12px; border: none;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
+      font-size: 12px; letter-spacing: 0.12em;
+      color: var(--primary); cursor: pointer;
+      transition: background 0.3s;
+    }
+    .quick-view-btn:hover { background: #fff; }
+    .product-card-collection {
+      font-size: 11px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+    .product-card-name {
+      font-family: var(--font-serif); font-size: 17px;
+      font-weight: 400; color: var(--primary);
+      transition: color 0.3s;
+    }
+    .product-card:hover .product-card-name { color: var(--secondary); }
+    .product-card-price {
+      font-size: 13px; color: var(--text-secondary);
+      margin-top: 4px; font-weight: 300;
+    }
+
+    /* ===== CTA Section ===== */
+    .cta-section {
+      padding: 120px 32px; text-align: center;
+      background: var(--bg);
+    }
+    .cta-inner { max-width: 640px; margin: 0 auto; }
+    .cta-section h2 {
+      font-family: var(--font-serif); font-size: 40px;
+      font-weight: 400; margin-bottom: 16px;
+    }
+    .cta-section .desc {
+      font-size: 17px; font-weight: 300;
+      color: var(--text-secondary); line-height: 1.8;
+      margin-bottom: 36px;
+    }
+    .btn-cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 14px 36px;
+      border: 1.5px solid var(--primary); background: transparent;
+      color: var(--primary); font-size: 13px; font-weight: 400;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.4s, color 0.4s, transform 0.15s;
+    }
+    .btn-cta:hover { background: var(--primary); color: #fff; transform: scale(1.03); }
+    .btn-cta:active { transform: scale(0.97); }
+
+    /* ===== Footer ===== */
+    .footer {
+      background: var(--primary); color: #fff;
+      padding: 80px 32px 40px;
+    }
+    .footer-inner { max-width: 1280px; margin: 0 auto; }
+    .footer-top {
+      display: grid; grid-template-columns: 2fr repeat(4, 1fr);
+      gap: 48px; padding-bottom: 48px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 32px;
+    }
+    .footer-brand-logo {
+      font-family: var(--font-serif); font-size: 22px;
+      letter-spacing: 0.15em; margin-bottom: 4px;
+    }
+    .footer-brand-sub {
+      font-size: 10px; letter-spacing: 0.35em;
+      color: rgba(255,255,255,0.5); margin-bottom: 24px;
+    }
+    .footer-brand p {
+      font-size: 14px; font-weight: 300; line-height: 1.8;
+      color: rgba(255,255,255,0.6); max-width: 380px;
+    }
+    .footer-column h4 {
+      font-size: 12px; font-weight: 400; letter-spacing: 0.12em;
+      text-transform: uppercase; margin-bottom: 20px;
+      color: rgba(255,255,255,0.9);
+    }
+    .footer-column ul { list-style: none; }
+    .footer-column li { margin-bottom: 12px; }
+    .footer-column a {
+      font-size: 14px; font-weight: 300;
+      color: rgba(255,255,255,0.6);
+      transition: color 0.3s;
+    }
+    .footer-column a:hover { color: #fff; text-decoration: none; }
+    .footer-bottom {
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 12px;
+    }
+    .footer-bottom .copyright { font-size: 13px; color: rgba(255,255,255,0.4); }
+    .footer-bottom-links { display: flex; gap: 24px; }
+    .footer-bottom-links a { font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 300; }
+    .footer-bottom-links a:hover { color: rgba(255,255,255,0.7); }
+
+    /* ===== Reveal ===== */
+    .reveal {
+      opacity: 0; transform: translateY(30px);
+      transition: opacity 0.8s cubic-bezier(0.22,1,0.36,1), transform 0.8s cubic-bezier(0.22,1,0.36,1);
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-left { transform: translateX(-40px); }
+    .reveal-right { transform: translateX(40px); }
+    .reveal-left.visible, .reveal-right.visible { transform: translateX(0); }
+    .reveal-d1 { transition-delay: 0.1s; }
+    .reveal-d2 { transition-delay: 0.2s; }
+    .reveal-d3 { transition-delay: 0.3s; }
+    .reveal-d4 { transition-delay: 0.4s; }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 1024px) {
+      .feature-inner { grid-template-columns: 1fr; gap: 32px; }
+      .feature-inner.reverse { direction: ltr; }
+      .product-grid { grid-template-columns: repeat(2, 1fr); }
+      .footer-top { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .hero h1 { font-size: 36px; }
+      .product-grid { grid-template-columns: 1fr 1fr; gap: 16px; }
+      .footer-top { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-inner">
+      <a class="nav-logo" href="#">
+        <div class="nav-logo-main">VACHERON CONSTANTIN</div>
+        <div class="nav-logo-sub">GENEVE</div>
+      </a>
+      <div class="nav-links">
+        <a href="#">时计臻品</a>
+        <a href="#">品牌世界</a>
+        <a href="#">服务</a>
+        <a href="#">探索</a>
+      </div>
+      <div class="nav-actions">
+        <button class="nav-btn" aria-label="搜索">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-bg" id="heroBg"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <div class="hero-text">
+        <h1>Patrimony 传承系列</h1>
+        <p class="subtitle">简约之美，恒久经典。以最纯粹的线条诠释高级制表的优雅精髓，每一枚时计都是对极致简约的致敬。</p>
+        <div class="hero-cta">
+          <a href="#" class="btn-hero">
+            探索系列
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="scroll-indicator">
+      <div class="scroll-mouse"><div class="scroll-dot"></div></div>
+    </div>
+  </section>
+
+  <!-- Feature 1 -->
+  <section class="feature-section">
+    <div class="feature-inner">
+      <div class="feature-media reveal reveal-left">
+        <div class="feature-media-bg" style="background: linear-gradient(135deg, #d4c8bc, #b8a898, #a09080);">
+          <span style="font-family:var(--font-serif); font-size:48px; color:rgba(255,255,255,0.12); letter-spacing:8px;">VC</span>
+        </div>
+      </div>
+      <div class="feature-text reveal reveal-right">
+        <h2>制表工艺<br>超越时间的艺术</h2>
+        <p>自1755年创立以来，江诗丹顿始终秉承精湛制表传统。每一枚机芯都经过大师级制表师的手工打磨与调校，将两百七十年的工艺积淀凝聚于方寸之间。</p>
+        <a href="#" class="feature-link">
+          探索工艺
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature 2 (reversed) -->
+  <section class="feature-section" style="background: #fff;">
+    <div class="feature-inner reverse">
+      <div class="feature-media reveal reveal-right">
+        <div class="feature-media-bg" style="background: linear-gradient(135deg, #2a231a, #3a3025, #4a4035);">
+          <span style="font-family:var(--font-serif); font-size:48px; color:rgba(255,255,255,0.06); letter-spacing:8px;">OVERSEAS</span>
+        </div>
+      </div>
+      <div class="feature-text reveal reveal-left">
+        <h2>Overseas 纵横四海</h2>
+        <p>为旅行者而生的当代运动腕表。独特的表圈设计、可互换表带系统与卓越的防水性能，让每一次出发都充满从容与优雅。</p>
+        <a href="#" class="feature-link">
+          探索系列
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Product Grid -->
+  <section class="product-section">
+    <div class="product-section-inner">
+      <h2 class="reveal">精选时计</h2>
+      <p class="lead reveal reveal-d1">探索江诗丹顿的非凡时计世界</p>
+      <div class="product-grid">
+        <a href="#" class="product-card reveal reveal-d1">
+          <div class="product-card-img">
+            <div class="product-card-img-inner" style="background: linear-gradient(180deg, #e8e4de, #d4cec4);">
+              <span style="font-family:var(--font-serif); font-size:32px; color:rgba(0,0,0,0.04);">I</span>
+            </div>
+            <div class="product-card-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-card-collection">Patrimony 传承系列</div>
+          <div class="product-card-name">传承系列手动上链腕表</div>
+          <div class="product-card-price">参考价 ¥178,000</div>
+        </a>
+        <a href="#" class="product-card reveal reveal-d2">
+          <div class="product-card-img">
+            <div class="product-card-img-inner" style="background: linear-gradient(180deg, #ddd8d0, #c8c0b4);">
+              <span style="font-family:var(--font-serif); font-size:32px; color:rgba(0,0,0,0.04);">II</span>
+            </div>
+            <div class="product-card-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-card-collection">Overseas 纵横四海</div>
+          <div class="product-card-name">纵横四海自动上链腕表</div>
+          <div class="product-card-price">参考价 ¥235,000</div>
+        </a>
+        <a href="#" class="product-card reveal reveal-d3">
+          <div class="product-card-img">
+            <div class="product-card-img-inner" style="background: linear-gradient(180deg, #e0dcd6, #cec6ba);">
+              <span style="font-family:var(--font-serif); font-size:32px; color:rgba(0,0,0,0.04);">III</span>
+            </div>
+            <div class="product-card-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-card-collection">Historiques 历史名作</div>
+          <div class="product-card-name">历史名作系列222腕表</div>
+          <div class="product-card-price">参考价 ¥398,000</div>
+        </a>
+        <a href="#" class="product-card reveal reveal-d4">
+          <div class="product-card-img">
+            <div class="product-card-img-inner" style="background: linear-gradient(180deg, #d8d4cc, #c4beb4);">
+              <span style="font-family:var(--font-serif); font-size:32px; color:rgba(0,0,0,0.04);">IV</span>
+            </div>
+            <div class="product-card-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-card-collection">Traditionnelle 传袭系列</div>
+          <div class="product-card-name">传袭系列万年历计时腕表</div>
+          <div class="product-card-price">参考价 ¥628,000</div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="cta-section">
+    <div class="cta-inner reveal">
+      <h2>亲临品鉴</h2>
+      <p class="desc">莅临江诗丹顿精品店，我们的专属顾问将为您提供一对一的尊享服务，帮助您甄选最契合的时计臻品。</p>
+      <a href="#" class="btn-cta">查找精品店</a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="footer-brand-logo">VACHERON CONSTANTIN</div>
+          <div class="footer-brand-sub">GENEVE</div>
+          <p>自1755年以来，江诗丹顿始终秉承「悉力以赴，精益求精」的品牌理念，将精湛工艺、卓越设计与创新精神完美融合。</p>
+        </div>
+        <div class="footer-column">
+          <h4>时计臻品</h4>
+          <ul>
+            <li><a href="#">高级制表</a></li>
+            <li><a href="#">经典系列</a></li>
+            <li><a href="#">当代系列</a></li>
+            <li><a href="#">复杂功能时计</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h4>品牌世界</h4>
+          <ul>
+            <li><a href="#">品牌历史</a></li>
+            <li><a href="#">制表工艺</a></li>
+            <li><a href="#">艺术与文化</a></li>
+            <li><a href="#">新闻与活动</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h4>服务</h4>
+          <ul>
+            <li><a href="#">售后服务</a></li>
+            <li><a href="#">保养指南</a></li>
+            <li><a href="#">真伪鉴别</a></li>
+            <li><a href="#">联系我们</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h4>探索</h4>
+          <ul>
+            <li><a href="#">数字杂志</a></li>
+            <li><a href="#">制表学校</a></li>
+            <li><a href="#">精品店</a></li>
+            <li><a href="#">职业机会</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span class="copyright">&copy; 2026 Vacheron Constantin. 版权所有</span>
+        <div class="footer-bottom-links">
+          <a href="#">隐私政策</a>
+          <a href="#">使用条款</a>
+          <a href="#">网站地图</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Hero bg animation
+    setTimeout(() => document.getElementById('heroBg').classList.add('loaded'), 100);
+
+    // Navbar scroll
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 50);
+    });
+
+    // Scroll reveal
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+      });
+    }, { threshold: 0.1, rootMargin: '-60px' });
+    document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+  </script>
+</body>
+</html>

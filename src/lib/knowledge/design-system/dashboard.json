@@ -1,0 +1,65 @@
+{
+  "name": "Dashboard",
+  "style": "data-dense",
+  "description": "Dashboard/SaaS design: information density, clear hierarchy, functional layout, status indicators",
+  "colors": {
+    "primary": "#4F46E5",
+    "secondary": "#6366F1",
+    "accent": "#F59E0B",
+    "background": "#F9FAFB",
+    "surface": "#FFFFFF",
+    "sidebar": "#1F2937",
+    "text-primary": "#111827",
+    "text-secondary": "#6B7280",
+    "success": "#10B981",
+    "warning": "#F59E0B",
+    "error": "#EF4444",
+    "border": "#E5E7EB"
+  },
+  "typography": {
+    "heading": "'Inter', -apple-system, sans-serif",
+    "body": "'Inter', -apple-system, sans-serif",
+    "mono": "'JetBrains Mono', 'Fira Code', monospace",
+    "headingWeight": "600",
+    "bodyWeight": "400",
+    "headingSizes": ["24px", "20px", "18px", "16px"],
+    "bodySizes": ["14px", "13px", "12px"],
+    "lineHeight": "1.5"
+  },
+  "spacing": {
+    "base": "4px",
+    "scale": ["2px", "4px", "8px", "12px", "16px", "20px", "24px", "32px"],
+    "containerMaxWidth": "100%",
+    "sectionPadding": "24px",
+    "cardPadding": "16px",
+    "sidebarWidth": "256px"
+  },
+  "layout": {
+    "grid": "css-grid",
+    "gap": "16px",
+    "breakpoints": { "sm": "640px", "md": "768px", "lg": "1024px", "xl": "1280px" },
+    "sidebar": true,
+    "headerFixed": true
+  },
+  "components": {
+    "borderRadius": "8px",
+    "borderRadiusSm": "4px",
+    "shadow": "0 1px 3px rgba(0,0,0,0.1)",
+    "shadowLg": "0 4px 6px rgba(0,0,0,0.07), 0 10px 15px rgba(0,0,0,0.04)",
+    "navHeight": "56px",
+    "navBg": "#FFFFFF",
+    "buttonRadius": "6px",
+    "buttonPadding": "8px 16px",
+    "inputRadius": "6px",
+    "badgeRadius": "9999px",
+    "tableRowHeight": "48px"
+  },
+  "animation": {
+    "style": "functional",
+    "duration": "0.2s",
+    "easing": "cubic-bezier(0.4, 0, 0.2, 1)",
+    "hoverBg": "rgba(0,0,0,0.02)",
+    "entrance": "fade-in",
+    "transition": "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+  }
+}

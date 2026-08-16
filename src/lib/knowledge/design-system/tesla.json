@@ -1,0 +1,56 @@
+{
+  "name": "Tesla",
+  "style": "cinematic-immersive",
+  "description": "Tesla's design language: full-bleed imagery, minimal UI overlays, bold typography, cinematic feel",
+  "colors": {
+    "primary": "#3E6AE1",
+    "secondary": "#171A20",
+    "accent": "#E82127",
+    "background": "#FFFFFF",
+    "surface": "#F4F4F4",
+    "text-primary": "#171A20",
+    "text-secondary": "#5C5E62",
+    "overlay-bg": "rgba(0,0,0,0.4)",
+    "overlay-text": "#FFFFFF"
+  },
+  "typography": {
+    "heading": "'Gotham', 'Inter', -apple-system, sans-serif",
+    "body": "'Gotham', 'Inter', -apple-system, sans-serif",
+    "headingWeight": "500",
+    "bodyWeight": "400",
+    "headingSizes": ["40px", "32px", "28px", "20px"],
+    "bodySizes": ["16px", "14px", "12px"],
+    "lineHeight": "1.4"
+  },
+  "spacing": {
+    "base": "8px",
+    "scale": ["8px", "16px", "24px", "32px", "48px", "64px", "96px"],
+    "containerMaxWidth": "1440px",
+    "sectionPadding": "0",
+    "heroHeight": "100vh"
+  },
+  "layout": {
+    "grid": "full-bleed",
+    "gap": "0",
+    "breakpoints": { "sm": "768px", "md": "1024px", "lg": "1440px" },
+    "centered": true
+  },
+  "components": {
+    "borderRadius": "4px",
+    "borderRadiusLg": "12px",
+    "shadow": "0 2px 8px rgba(0,0,0,0.12)",
+    "navHeight": "52px",
+    "navBg": "transparent",
+    "buttonRadius": "4px",
+    "buttonPadding": "12px 56px",
+    "buttonFont": "500 14px"
+  },
+  "animation": {
+    "style": "parallax-scroll",
+    "duration": "0.5s",
+    "easing": "cubic-bezier(0.645, 0.045, 0.355, 1)",
+    "scrollReveal": true,
+    "entrance": "fade-zoom",
+    "transition": "all 0.5s cubic-bezier(0.645, 0.045, 0.355, 1)"
+  }
+}

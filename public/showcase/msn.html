@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MSN 新闻 - Code Designer AI Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: #1a1a1a; background: #f3f3f3;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #2563EB; text-decoration: none; transition: color 0.2s; }
+    a:hover { color: #1d4ed8; text-decoration: underline; }
+
+    /* ===== Header ===== */
+    .header {
+      position: sticky; top: 0; z-index: 100;
+      background: #fff; border-bottom: 1px solid #e5e5e5;
+    }
+    .header-inner {
+      max-width: 1280px; margin: 0 auto;
+      padding: 0 24px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 800; font-size: 20px;
+    }
+    .logo-text { display: flex; flex-direction: column; }
+    .logo-text strong { font-size: 18px; color: #111; line-height: 1.2; }
+    .logo-text span { font-size: 11px; color: #6b7280; line-height: 1; }
+    .header-nav { display: flex; align-items: center; gap: 4px; }
+    .header-nav a {
+      font-size: 14px; font-weight: 500; color: #4b5563;
+      padding: 8px 14px; border-radius: 8px;
+      transition: color 0.2s, background 0.2s;
+      position: relative; text-decoration: none;
+    }
+    .header-nav a:hover { color: #111; background: #f3f4f6; text-decoration: none; }
+    .header-nav a.active {
+      color: #2563EB;
+    }
+    .header-nav a.active::after {
+      content: ''; position: absolute; bottom: -1px; left: 14px; right: 14px;
+      height: 2px; background: #2563EB; border-radius: 1px;
+    }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .search-wrap { position: relative; }
+    .search-btn {
+      width: 36px; height: 36px; border: none; background: transparent;
+      border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: #4b5563; transition: background 0.2s, color 0.2s;
+    }
+    .search-btn:hover { background: #f3f4f6; color: #111; }
+    .search-btn svg { width: 20px; height: 20px; }
+    .search-dropdown {
+      position: absolute; right: 0; top: 44px; width: 320px;
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+      border: 1px solid #e5e5e5; padding: 16px;
+      display: none;
+    }
+    .search-dropdown.open { display: block; }
+    .search-form { display: flex; }
+    .search-form input {
+      flex: 1; padding: 8px 14px; border: 1px solid #d1d5db;
+      border-right: none; border-radius: 8px 0 0 8px;
+      font-size: 14px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-form input:focus { border-color: #2563EB; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+    .search-form button {
+      padding: 8px 16px; background: #2563EB; color: #fff;
+      border: none; border-radius: 0 8px 8px 0;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .search-form button:hover { background: #1d4ed8; }
+
+    /* ===== Main Layout ===== */
+    .main-layout {
+      max-width: 1280px; margin: 0 auto;
+      padding: 32px 24px;
+      display: grid; grid-template-columns: 2fr 1fr;
+      gap: 32px;
+    }
+
+    /* ===== Article ===== */
+    .article-card {
+      background: #fff; border-radius: 12px;
+      overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .article-header { padding: 28px 28px 20px; border-bottom: 1px solid #f3f4f6; }
+    .article-category {
+      display: inline-block; padding: 4px 12px;
+      background: #eff6ff; color: #2563EB;
+      font-size: 13px; font-weight: 500;
+      border-radius: 980px; margin-bottom: 16px;
+    }
+    .article-title {
+      font-size: 32px; font-weight: 700; line-height: 1.25;
+      color: #111; margin-bottom: 16px;
+    }
+    .article-meta {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px;
+    }
+    .author-info { display: flex; align-items: center; gap: 10px; }
+    .author-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, #60a5fa, #3b82f6);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 600; font-size: 14px;
+    }
+    .author-details { display: flex; flex-direction: column; }
+    .author-name { font-size: 14px; font-weight: 600; color: #111; }
+    .author-source { font-size: 12px; color: #6b7280; }
+    .read-time {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 13px; color: #6b7280;
+    }
+    .read-time svg { width: 16px; height: 16px; }
+
+    /* Hero Image */
+    .article-hero {
+      margin: 24px 28px; border-radius: 12px; overflow: hidden;
+      position: relative;
+    }
+    .article-hero-img {
+      width: 100%; aspect-ratio: 16/9;
+      background: linear-gradient(135deg, #1e3a5f, #2d5a87, #3b7ab8);
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .article-hero-img::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 40% 50%, rgba(255,255,255,0.08), transparent 60%);
+    }
+    .hero-placeholder-text {
+      font-size: 14px; color: rgba(255,255,255,0.3);
+      text-transform: uppercase; letter-spacing: 4px; font-weight: 600;
+      position: relative; z-index: 1;
+    }
+    .hero-caption {
+      padding: 10px 0; font-size: 13px; color: #6b7280;
+      text-align: center;
+    }
+
+    /* Article Body */
+    .article-body {
+      padding: 0 28px 28px; font-size: 17px; line-height: 1.8;
+      color: #374151;
+    }
+    .article-body p { margin-bottom: 20px; }
+    .article-body blockquote {
+      border-left: 4px solid #2563EB;
+      padding: 16px 24px; margin: 28px 0;
+      background: #f8fafc; border-radius: 0 8px 8px 0;
+      font-style: italic; color: #4b5563;
+    }
+    .article-body .inline-img {
+      margin: 28px 0; border-radius: 12px; overflow: hidden;
+    }
+    .inline-img-placeholder {
+      width: 100%; aspect-ratio: 16/10;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .inline-img-caption {
+      padding: 10px 0; font-size: 13px; color: #6b7280; text-align: center;
+    }
+
+    /* Article Footer */
+    .article-footer {
+      padding: 20px 28px 28px;
+      border-top: 1px solid #f3f4f6;
+    }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .tag {
+      display: inline-block; padding: 4px 12px;
+      background: #f3f4f6; color: #4b5563;
+      font-size: 13px; border-radius: 980px;
+      transition: background 0.2s, color 0.2s; cursor: pointer;
+    }
+    .tag:hover { background: #e5e7eb; color: #111; }
+    .share-section { padding-top: 20px; border-top: 1px solid #f3f4f6; }
+    .share-title { font-size: 14px; font-weight: 600; color: #111; margin-bottom: 12px; }
+    .share-buttons { display: flex; gap: 8px; }
+    .share-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.15s, background 0.2s;
+    }
+    .share-btn:hover { transform: scale(1.1); }
+    .share-btn:active { transform: scale(0.95); }
+    .share-btn svg { width: 16px; height: 16px; }
+    .share-btn.wechat { background: #07C160; color: #fff; }
+    .share-btn.weibo { background: #E6162D; color: #fff; }
+    .share-btn.qq { background: #12B7F5; color: #fff; }
+    .share-btn.link { background: #f3f4f6; color: #4b5563; }
+
+    /* Related Articles */
+    .related-section { padding-top: 20px; border-top: 1px solid #f3f4f6; margin-top: 20px; }
+    .related-title { font-size: 14px; font-weight: 600; color: #111; margin-bottom: 12px; }
+    .related-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .related-card {
+      padding: 12px; background: #f9fafb; border-radius: 10px;
+      transition: background 0.2s, transform 0.2s;
+      cursor: pointer;
+    }
+    .related-card:hover { background: #f3f4f6; transform: translateY(-2px); }
+    .related-card-img {
+      width: 100%; aspect-ratio: 16/10; border-radius: 6px;
+      margin-bottom: 8px;
+    }
+    .related-card-title {
+      font-size: 13px; font-weight: 600; color: #111;
+      line-height: 1.4; margin-bottom: 4px;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .related-card-source { font-size: 11px; color: #6b7280; }
+
+    /* ===== Sidebar ===== */
+    .sidebar { display: flex; flex-direction: column; gap: 24px; }
+    .sidebar-card {
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    .sidebar-card-header {
+      padding: 16px 20px; border-bottom: 1px solid #f3f4f6;
+      font-size: 16px; font-weight: 700; color: #111;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sidebar-card-header svg { width: 18px; height: 18px; color: #ef4444; }
+    .trending-list { padding: 8px 0; }
+    .trending-item {
+      display: flex; gap: 14px; padding: 12px 20px;
+      transition: background 0.2s; cursor: pointer;
+    }
+    .trending-item:hover { background: #f9fafb; }
+    .trending-num {
+      font-size: 22px; font-weight: 800; color: #d1d5db;
+      min-width: 28px; line-height: 1;
+    }
+    .trending-content { flex: 1; }
+    .trending-title {
+      font-size: 14px; font-weight: 600; color: #111;
+      line-height: 1.4; margin-bottom: 4px;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .trending-source { font-size: 12px; color: #6b7280; }
+    .ad-card { padding: 20px; text-align: center; }
+    .ad-placeholder {
+      width: 100%; aspect-ratio: 3/2;
+      background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; color: #9ca3af;
+    }
+    .weather-card { padding: 20px; }
+    .weather-main { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+    .weather-temp { font-size: 48px; font-weight: 300; color: #111; }
+    .weather-info { flex: 1; }
+    .weather-city { font-size: 16px; font-weight: 600; color: #111; margin-bottom: 2px; }
+    .weather-desc { font-size: 13px; color: #6b7280; }
+    .weather-icon { font-size: 36px; }
+    .weather-forecast {
+      display: flex; justify-content: space-between;
+      border-top: 1px solid #f3f4f6; padding-top: 12px;
+    }
+    .forecast-day { text-align: center; }
+    .forecast-day .day { font-size: 12px; color: #6b7280; margin-bottom: 4px; }
+    .forecast-day .icon { font-size: 18px; margin-bottom: 2px; }
+    .forecast-day .temp { font-size: 13px; font-weight: 600; color: #111; }
+
+    /* ===== Footer ===== */
+    .footer {
+      background: #fff; border-top: 1px solid #e5e5e5;
+      padding: 32px 24px; margin-top: 32px;
+    }
+    .footer-inner {
+      max-width: 1280px; margin: 0 auto;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-links { display: flex; gap: 20px; flex-wrap: wrap; }
+    .footer-links a { font-size: 13px; color: #6b7280; }
+    .footer-links a:hover { color: #111; }
+    .footer-copy { font-size: 13px; color: #9ca3af; }
+
+    /* ===== Scroll Reveal ===== */
+    .reveal {
+      opacity: 0; transform: translateY(20px);
+      transition: opacity 0.5s cubic-bezier(0.16,1,0.32,1), transform 0.5s cubic-bezier(0.16,1,0.32,1);
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-d1 { transition-delay: 0.1s; }
+    .reveal-d2 { transition-delay: 0.2s; }
+    .reveal-d3 { transition-delay: 0.3s; }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 1024px) {
+      .main-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .header-nav { display: none; }
+      .article-title { font-size: 24px; }
+      .article-header, .article-body, .article-footer { padding-left: 20px; padding-right: 20px; }
+      .article-hero { margin: 16px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <a class="header-logo" href="#">
+        <div class="logo-icon">M</div>
+        <div class="logo-text"><strong>MSN</strong><span>新闻</span></div>
+      </a>
+      <nav class="header-nav">
+        <a href="#" class="active">首页</a>
+        <a href="#">新闻</a>
+        <a href="#">娱乐</a>
+        <a href="#">体育</a>
+        <a href="#">财经</a>
+        <a href="#">生活</a>
+      </nav>
+      <div class="header-actions">
+        <div class="search-wrap">
+          <button class="search-btn" id="searchToggle" aria-label="搜索">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          </button>
+          <div class="search-dropdown" id="searchDropdown">
+            <form class="search-form" onsubmit="return false">
+              <input type="text" placeholder="搜索新闻..." autofocus>
+              <button type="submit">搜索</button>
+            </form>
+          </div>
+        </div>
+        <button class="search-btn" aria-label="用户" style="color:#4b5563">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="main-layout">
+    <!-- Article -->
+    <article class="article-card reveal">
+      <div class="article-header">
+        <span class="article-category">娱乐</span>
+        <h1 class="article-title">百老汇明星 Josh Grisetti 离世享年44岁：《了不起的麦瑟尔夫人》中令人难忘的角色</h1>
+        <div class="article-meta">
+          <div class="author-info">
+            <div class="author-avatar">A</div>
+            <div class="author-details">
+              <span class="author-name">Associated Press</span>
+              <span class="author-source">美联社 · 2小时前</span>
+            </div>
+          </div>
+          <div class="read-time">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            阅读时间: 5分钟
+          </div>
+        </div>
+      </div>
+
+      <div class="article-hero">
+        <div class="article-hero-img">
+          <span class="hero-placeholder-text">Article Image</span>
+        </div>
+        <div class="hero-caption">Josh Grisetti 在《了不起的麦瑟尔夫人》中的剧照 | 图片来源: Amazon Studios</div>
+      </div>
+
+      <div class="article-body">
+        <p>百老汇知名演员 Josh Grisetti 于本周一在纽约去世，享年44岁。他的经纪人确认了这一消息，但尚未公布具体死因。Grisetti 以其在舞台和银幕上的出色表现而闻名，是纽约戏剧界最受尊敬的性格演员之一。</p>
+        <p>Grisetti 最为人熟知的角色是在 Amazon Prime 热门剧集《了不起的麦瑟尔夫人》（The Marvelous Mrs. Maisel）中饰演的喜剧编剧。他的表演被评论家赞誉为"温暖而充满智慧"，为这部以20世纪50年代末纽约为背景的剧集增添了不少光彩。</p>
+        <blockquote>
+          "Josh 是我合作过的最有才华的演员之一。他对角色的理解深度和对喜剧节奏的把控能力是无与伦比的。" —— 一位百老汇导演
+        </blockquote>
+        <p>在百老汇舞台上，Grisetti 参演了多部著名音乐剧，包括《Hairspray》、《It Shoulda Been You》等。他的同事和朋友们纷纷在社交媒体上表达了对他的怀念，称赞他不仅是一位出色的演员，更是一位慷慨的朋友和导师。</p>
+        <div class="inline-img">
+          <div class="inline-img-placeholder" style="background: linear-gradient(135deg, #374151, #4b5563, #6b7280);">
+            <span style="font-size:13px; color:rgba(255,255,255,0.3); letter-spacing:3px; text-transform:uppercase;">Broadway Stage</span>
+          </div>
+          <div class="inline-img-caption">Grisetti 在百老汇舞台上的精彩演出</div>
+        </div>
+        <p>Grisetti 出生于华盛顿特区，从小就对表演充满热情。他在卡内基梅隆大学获得戏剧学位后移居纽约，迅速在戏剧界崭露头角。除了表演，他还是一位热情的戏剧教育者，经常在纽约各大表演学校举办大师班。</p>
+        <p>他的离世让整个戏剧社区深感悲痛。百老汇联盟发表声明说："Josh Grisetti 的才华和善良将永远被铭记。他为美国戏剧做出了不可磨灭的贡献。"多家剧院计划在本周的演出前为他默哀一分钟。</p>
+      </div>
+
+      <div class="article-footer">
+        <div class="tags">
+          <span class="tag">百老汇</span>
+          <span class="tag">Josh Grisetti</span>
+          <span class="tag">了不起的麦瑟尔夫人</span>
+          <span class="tag">娱乐新闻</span>
+          <span class="tag">纽约</span>
+        </div>
+        <div class="share-section">
+          <div class="share-title">分享文章</div>
+          <div class="share-buttons">
+            <button class="share-btn wechat" aria-label="微信">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 13.5a1 1 0 100-2 1 1 0 000 2zm5 0a1 1 0 100-2 1 1 0 000 2zM12 2C6.477 2 2 5.813 2 10.5c0 2.61 1.41 4.94 3.61 6.49l-.92 2.76 3.2-1.6c1.3.46 2.7.72 4.11.72 5.523 0 10-3.813 10-8.5S17.523 2 12 2z"/></svg>
+            </button>
+            <button class="share-btn weibo" aria-label="微博">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10.1 18.3c-3.6.4-6.7-1.3-6.9-3.7-.2-2.4 2.6-4.7 6.2-5.1 3.6-.4 6.7 1.3 6.9 3.7.2 2.4-2.6 4.7-6.2 5.1zm8.4-12.2c-.5-.1-.8-.6-.7-1.1.2-.6-.1-1.1-.6-1.2-.5-.1-1 .2-1.2.7-.1.5-.6.8-1.1.7-.5-.1-.8-.6-.7-1.1.4-1.4 1.7-2.3 3.1-2.2 1.4.2 2.4 1.2 2.5 2.6.1.5-.4 1-1 .9-.1 0-.2-.1-.3-.3z"/></svg>
+            </button>
+            <button class="share-btn qq" aria-label="QQ">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C7 2 3 6.5 3 12c0 2.2.7 4.2 1.8 5.8L3 22l4.2-1.8c1.6.9 3.4 1.4 5.3 1.4h.5c5 0 9-4.5 9-10S17 2 12 2z"/></svg>
+            </button>
+            <button class="share-btn link" aria-label="复制链接">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="related-section">
+          <div class="related-title">相关文章</div>
+          <div class="related-grid">
+            <div class="related-card">
+              <div class="related-card-img" style="background: linear-gradient(135deg, #1e3a5f, #2d5a87);"></div>
+              <div class="related-card-title">2026年百老汇颁奖季：谁将成为最大赢家？</div>
+              <div class="related-card-source">Variety · 3小时前</div>
+            </div>
+            <div class="related-card">
+              <div class="related-card-img" style="background: linear-gradient(135deg, #5b2c6f, #7d3c98);"></div>
+              <div class="related-card-title">《了不起的麦瑟尔夫人》续集计划曝光</div>
+              <div class="related-card-source">Deadline · 5小时前</div>
+            </div>
+            <div class="related-card">
+              <div class="related-card-img" style="background: linear-gradient(135deg, #1a5276, #2e86c1);"></div>
+              <div class="related-card-title">纽约戏剧界群星缅怀已故艺术家</div>
+              <div class="related-card-source">NY Times · 6小时前</div>
+            </div>
+            <div class="related-card">
+              <div class="related-card-img" style="background: linear-gradient(135deg, #4a235a, #76448a);"></div>
+              <div class="related-card-title">百老汇经典剧目回顾：20年舞台传奇</div>
+              <div class="related-card-source">Playbill · 8小时前</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <!-- Trending -->
+      <div class="sidebar-card reveal reveal-d1">
+        <div class="sidebar-card-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          热门新闻
+        </div>
+        <div class="trending-list">
+          <div class="trending-item">
+            <span class="trending-num">1</span>
+            <div class="trending-content">
+              <div class="trending-title">全球芯片短缺持续：科技巨头纷纷加大本土化生产投资</div>
+              <div class="trending-source">Reuters · 1小时前</div>
+            </div>
+          </div>
+          <div class="trending-item">
+            <span class="trending-num">2</span>
+            <div class="trending-content">
+              <div class="trending-title">2026年世界杯预选赛：国足客场险胜对手</div>
+              <div class="trending-source">新华社 · 2小时前</div>
+            </div>
+          </div>
+          <div class="trending-item">
+            <span class="trending-num">3</span>
+            <div class="trending-content">
+              <div class="trending-title">苹果发布全新 Vision Pro 2：更轻便更强大</div>
+              <div class="trending-source">The Verge · 3小时前</div>
+            </div>
+          </div>
+          <div class="trending-item">
+            <span class="trending-num">4</span>
+            <div class="trending-content">
+              <div class="trending-title">新能源汽车销量创新高：渗透率突破60%</div>
+              <div class="trending-source">财新网 · 4小时前</div>
+            </div>
+          </div>
+          <div class="trending-item">
+            <span class="trending-num">5</span>
+            <div class="trending-content">
+              <div class="trending-title">NASA 火星探测器发现古代河流遗迹</div>
+              <div class="trending-source">NASA · 5小时前</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Weather -->
+      <div class="sidebar-card reveal reveal-d2">
+        <div class="sidebar-card-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:#f59e0b"><circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          天气
+        </div>
+        <div class="weather-card">
+          <div class="weather-main">
+            <div class="weather-temp">32°</div>
+            <div class="weather-info">
+              <div class="weather-city">上海</div>
+              <div class="weather-desc">多云转晴</div>
+            </div>
+            <div class="weather-icon">⛅</div>
+          </div>
+          <div class="weather-forecast">
+            <div class="forecast-day"><div class="day">周二</div><div class="icon">☀️</div><div class="temp">34°</div></div>
+            <div class="forecast-day"><div class="day">周三</div><div class="icon">⛈️</div><div class="temp">28°</div></div>
+            <div class="forecast-day"><div class="day">周四</div><div class="icon">🌤️</div><div class="temp">31°</div></div>
+            <div class="forecast-day"><div class="day">周五</div><div class="icon">☀️</div><div class="temp">33°</div></div>
+            <div class="forecast-day"><div class="day">周六</div><div class="icon">🌧️</div><div class="temp">27°</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ad -->
+      <div class="sidebar-card reveal reveal-d3">
+        <div class="ad-card">
+          <div class="ad-placeholder">广告位</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#">关于 MSN</a>
+        <a href="#">隐私与 Cookie</a>
+        <a href="#">使用条款</a>
+        <a href="#">反馈</a>
+        <a href="#">广告</a>
+      </div>
+      <div class="footer-copy">&copy; 2026 Microsoft. 保留所有权利。</div>
+    </div>
+  </footer>
+
+  <script>
+    // Search toggle
+    const searchToggle = document.getElementById('searchToggle');
+    const searchDropdown = document.getElementById('searchDropdown');
+    searchToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      searchDropdown.classList.toggle('open');
+      if (searchDropdown.classList.contains('open')) {
+        searchDropdown.querySelector('input').focus();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!searchDropdown.contains(e.target)) {
+        searchDropdown.classList.remove('open');
+      }
+    });
+
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
