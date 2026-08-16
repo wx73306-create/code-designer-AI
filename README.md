@@ -22,16 +22,19 @@ URL → 网页抓取 → 视觉分析 → Design Token 提取 → 组件架构�
 
 用户只需粘贴一个 URL，平台自动完成 HTML / CSS / 布局 / 字体 / 颜色 / 尺寸 / 动画 等设计信息的解析，并生成可直接 `npm install && npm run dev` 跑起来的 Next.js 工程。
 
+平台支持用户在 **百炼 / MiMo / OpenAI / Anthropic / Gemini / DeepSeek** 等多个模型之间自由选择（视觉、规划、编码、质检等环节可独立指定模型），真正做到模型可插拔。
+
 ---
 
 ## ✨ 核心特性
 
 - 🤖 **多智能体协作**：抓取 / 视觉 / Token / 架构 / 编码 / 质检 六个 Agent 各司其职、顺序触发
-- 👁️ **视觉 + 语义双驱动**：截图视觉（qwen-vl-max）与 DOM 结构联合分析，还原度高于纯 DOM 解析
+- 👁️ **视觉 + 语义双驱动**：截图视觉与 DOM 结构联合分析，还原度高于纯 DOM 解析
 - 🎨 **Design Token 自动提取**：自动结构化输出颜色、字号、间距、圆角、阴影、动画曲线
 - 🧩 **组件架构智能规划**：自动拆分组件树、设计 Props、规划状态与数据流
 - 💻 **生产级代码生成**：输出 TypeScript + TailwindCSS，符合 ESLint / Prettier 规范
 - 🔍 **质量检测闭环**：自动化视觉对比 + 代码 Lint + 还原度评分
+- 🔌 **模型可插拔**：每个 Agent 的模型都可独立指定，支持多厂商混部
 - 📦 **一键导出**：ZIP 打包完整可运行 Next.js 项目
 - 🔐 **完整用户体系**：注册登录、找回密码、Admin 后台、配额管理、使用统计
 - 📚 **设计知识库**：内置 Apple / Tesla / Stripe / Linear / Gaming / Dashboard 六套设计风格档案
@@ -54,31 +57,31 @@ URL → 网页抓取 → 视觉分析 → Design Token 提取 → 组件架构�
                                │
                                ▼
               ┌────────────────────────────────┐
-              │ ② 视觉分析 Agent (qwen-vl-max) │
-              │   布局/字体/配色/组件识别      │
+              │ ② 视觉分析 Agent (VL 模型)     │
+              │   布局 / 字体 / 配色 / 组件    │
               └────────────────┬───────────────┘
                                │
                                ▼
               ┌────────────────────────────────┐
-              │ ③ Design Token Agent (qwen3)  │
+              │ ③ Design Token Agent (LLM)     │
               │   颜色/字号/间距/圆角/阴影     │
               └────────────────┬───────────────┘
                                │
                                ▼
               ┌────────────────────────────────┐
-              │ ④ 架构规划 Agent (qwen3)       │
+              │ ④ 架构规划 Agent (LLM)         │
               │   组件树 / Props / 状态设计    │
               └────────────────┬───────────────┘
                                │
                                ▼
               ┌────────────────────────────────┐
-              │ ⑤ 代码生成 Agent (qwen-coder)  │
+              │ ⑤ 代码生成 Agent (Coder LLM)   │
               │   React + TS + TailwindCSS     │
               └────────────────┬───────────────┘
                                │
                                ▼
               ┌────────────────────────────────┐
-              │ ⑥ 质量检测 Agent (qwen3+vl)    │
+              │ ⑥ 质量检测 Agent (LLM + VL)    │
               │   视觉对比 / Lint / 评分       │
               └────────────────┬───────────────┘
                                │
@@ -86,23 +89,7 @@ URL → 网页抓取 → 视觉分析 → Design Token 提取 → 组件架构�
                 ZIP 导出 / 在线预览 / 继续优化
 ```
 
----
-
-## 🧠 百炼模型调用链（核心）
-
-> 所有 LLM 调用均通过**阿里云百炼**（DashScope 兼容接口 / `bl` CLI）。
-
-| 智能体环节 | 使用模型 | 任务说明 | 调用方式 |
-|---|---|---|---|
-| ① 网页抓取 | Playwright（无 LLM） | 渲染目标页、导出 DOM / CSS / 截图 / 字体资源 | 本地服务 |
-| ② 视觉分析 | **qwen-vl-max** | 截图识别布局结构、字体族、配色体系、组件边界 | DashScope 兼容 API |
-| ③ Design Token 提取 | **qwen3-max** | 从视觉 + DOM 中结构化输出设计令牌（JSON Schema 强约束） | DashScope 兼容 API |
-| ④ 组件架构规划 | **qwen3-max** | 拆分组件树、设计 Props 接口与状态归属 | DashScope 兼容 API |
-| ⑤ React 代码生成 | **qwen-coder-plus** | 生成 React + TypeScript + TailwindCSS 代码 | DashScope 兼容 API |
-| ⑥ 质量检测 | **qwen3-max + qwen-vl-max** | 代码 Lint / 视觉对比 / 还原度评分 | DashScope 兼容 API |
-| 备用 Fallback | MiMo `mimo-v2.5`（可选） | 代码生成环节的 fallback | OpenAI 兼容 API |
-
-**自定义技能：** `QoderWorkCN` —— 封装百炼模型调用链的本地技能，统一管理 Agent 调度、Token 计量与失败重试。
+每个 Agent 的模型由用户在管理后台自由配置，支持百炼、MiMo、OpenAI、Anthropic、Gemini、DeepSeek 等多家厂商混合编排。
 
 ---
 
@@ -117,7 +104,7 @@ URL → 网页抓取 → 视觉分析 → Design Token 提取 → 组件架构�
 | 任务队列 | Redis + BullMQ（异步 Agent 执行） |
 | 认证 | Auth.js（NextAuth v5） |
 | 浏览器自动化 | Playwright |
-| AI 模型 | 阿里云百炼 · 通义千问 / 通义千问 VL / 通义千问 Coder |
+| AI 模型 | 阿里云百炼 / MiMo / OpenAI / Anthropic / Gemini / DeepSeek |
 | 部署 | Docker + Nginx + 阿里云 ECS |
 
 ---
@@ -130,7 +117,7 @@ URL → 网页抓取 → 视觉分析 → Design Token 提取 → 组件架构�
 - **pnpm** ≥ 8（推荐）或 npm ≥ 9
 - **PostgreSQL** ≥ 14
 - **Redis** ≥ 6
-- **阿里云百炼 API Key**（[点此申请](https://bailian.console.aliyun.com/)）
+- 至少一个 AI 厂商的 API Key（[阿里云百炼](https://bailian.console.aliyun.com/) / [MiMo](https://api.xiaomimimo.com) / OpenAI / Anthropic / Gemini / DeepSeek 任一）
 
 ### 安装与运行
 
@@ -144,7 +131,8 @@ npm install
 
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env，至少填入 ALIBABA_API_KEY / DATABASE_URL / REDIS_URL / AUTH_SECRET
+# 编辑 .env，至少填入 DATABASE_URL / REDIS_URL / AUTH_SECRET
+# 并至少填入一个 AI 厂商的 API Key（如 ALIBABA_API_KEY）
 
 # 数据库迁移
 npx prisma migrate deploy
@@ -165,10 +153,9 @@ npm run dev
 | `AUTH_SECRET` | NextAuth 会话密钥，`openssl rand -base64 32` 生成 | ✅ |
 | `AUTH_URL` | 应用对外 URL，如 `http://localhost:3000` | ✅ |
 | `AUTH_TRUST_HOST` | 反向代理场景设为 `true` | ✅ |
-| `ALIBABA_API_URL` | 百炼 DashScope 兼容 API 地址 | ✅ |
-| `ALIBABA_API_KEY` | 百炼 API Key（主力模型） | ✅ |
-| `MIMO_API_KEY` | MiMo API Key（代码生成 fallback） | ❌ |
-| `MIMO_MODEL` | MiMo 模型名，默认 `mimo-v2.5` | ❌ |
+| `ALIBABA_API_URL` / `ALIBABA_API_KEY` | 阿里云百炼（主力模型） | ✅ 至少一个 |
+| `MIMO_API_URL` / `MIMO_API_KEY` / `MIMO_MODEL` | MiMo（默认 `mimo-v2.5`） | ❌ |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` | OpenAI / Anthropic / Gemini | ❌ |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | 管理后台登录凭据 | ✅ |
 | `ADMIN_SESSION_SECRET` | 管理后台会话签名密钥 | ✅ |
 
@@ -180,29 +167,24 @@ npm run dev
 code-designer-AI/
 ├── prisma/                          # Prisma schema + 迁移 + seed
 ├── public/
-│   └── showcase/                    # 内置复刻样例（HTML 静态）
+│   └── showcase/                    # 内置复刻样例（HTML 静态，应用运行时使用）
+├── docs/                            # GitHub Pages 根目录（内置样例的预览版）
+│   └── showcase/                    # 与 public/showcase 同源，供 Pages 预览
 ├── src/
 │   ├── app/                         # Next.js App Router
 │   │   ├── (auth)/                  # 登录 / 注册 / 找回密码
 │   │   ├── (dashboard)/             # 用户工作台
 │   │   ├── admin/                   # 管理后台（仪表盘 / 用户 / 模型 / 监控 / 费用）
 │   │   ├── analysis/                # 复刻分析页
-│   │   ├── api/                     # API 路由（workflow / quota / screenshot / ...）
+│   │   ├── api/                     # API 路由
 │   │   └── page.tsx                 # 落地页
 │   ├── components/
 │   │   ├── landing/                 # Hero / AI 流程 / Agent 系统 / Showcase
 │   │   ├── workspace/               # 工作台 v2
 │   │   ├── workspace-v3/            # 工作台 v3（多面板布局 + AI Action Bar）
-│   │   ├── ui/                      # 基础 UI（glass-card / progress / badge）
-│   │   └── ...
+│   │   └── ui/                      # 基础 UI 组件
 │   ├── lib/
-│   │   ├── agents/                  # 六个 Agent 实现
-│   │   │   ├── captureAgent.ts
-│   │   │   ├── visionAgent.ts
-│   │   │   ├── designMemoryAgent.ts
-│   │   │   ├── optimizeAgent.ts
-│   │   │   ├── reviewAgent.ts
-│   │   │   └── pipeline.ts          # 编排调度
+│   │   ├── agents/                  # 六个 Agent 实现（capture / vision / designMemory / optimize / review / pipeline）
 │   │   ├── prompts/                 # 各 Agent 的 prompt 模板
 │   │   ├── knowledge-base/          # 设计风格档案（Apple / Tesla / Stripe ...）
 │   │   ├── export/                  # 项目 ZIP 导出器
@@ -227,70 +209,15 @@ code-designer-AI/
 
 ## 📦 内置复刻样例
 
-`public/showcase/` 下预置 5 个真实复刻案例，可直接打开查看复刻效果：
+`docs/showcase/` 下预置了 5 个真实复刻案例，**点击下方链接即可在 GitHub Pages 上直接预览完整还原效果**：
 
-| 样例 | 文件 |
+| 样例 | 在线预览 |
 |---|---|
-| Apple Education | [`public/showcase/apple-edu.html`](public/showcase/apple-edu.html) |
-| Mercedes-Benz | [`public/showcase/mercedes-benz.html`](public/showcase/mercedes-benz.html) |
-| MSN | [`public/showcase/msn.html`](public/showcase/msn.html) |
-| NexusMind | [`public/showcase/nexusmind.html`](public/showcase/nexusmind.html) |
-| Vacheron Constantin | [`public/showcase/vacheron.html`](public/showcase/vacheron.html) |
-
----
-
-## 🚢 部署
-
-### Docker
-
-```bash
-docker build -t code-designer-ai .
-docker run -d --name cda -p 3000:3000 --env-file .env code-designer-ai
-```
-
-### 阿里云 ECS 一键部署
-
-参见 [`deploy/README.md`](deploy/README.md)，包含 Nginx 反代、systemd 守护、Let's Encrypt SSL 全套脚本。
-
----
-
-## 🗺️ Roadmap
-
-- [ ] 支持更多框架（Vue 3 / Svelte / Solid）
-- [ ] 设计风格档案市场（用户上传自定义风格 JSON）
-- [ ] 团队协作（多人编辑同一复刻项目 + 实时协同）
-- [ ] Chrome 浏览器插件（一键复刻当前页面）
-- [ ] 微调专用代码模型（基于 qwen-coder 微调网页还原专用版）
-
----
-
-## 🤝 参与贡献
-
-欢迎提 Issue / PR 改进任何一环（Agent prompt、组件模板、知识库、文档）。
-
-```bash
-# 提 PR 流程
-git checkout -b feat/your-feature
-git commit -m "feat: describe your change"
-git push origin feat/your-feature
-```
-
----
-
-## 📄 License
-
-[MIT](LICENSE) © 2025 吴Wxx
-
----
-
-## 🙋 关于作者
-
-**吴Wxx** · 全栈 / AI 工程方向
-
-本项目参加 **阿里云百炼 × 通义 AI 开发者计划** 评选。
-
-- GitHub: [@wx73306-create](https://github.com/wx73306-create)
-- 提报百炼开发者计划：[点此加入](http://bailian.console.aliyun.com/opensource)
+| Apple Education | [apple-edu.html](https://wx73306-create.github.io/code-designer-AI/showcase/apple-edu.html) |
+| Mercedes-Benz | [mercedes-benz.html](https://wx73306-create.github.io/code-designer-AI/showcase/mercedes-benz.html) |
+| MSN | [msn.html](https://wx73306-create.github.io/code-designer-AI/showcase/msn.html) |
+| NexusMind | [nexusmind.html](https://wx73306-create.github.io/code-designer-AI/showcase/nexusmind.html) |
+| Vacheron Constantin | [vacheron.html](https://wx73306-create.github.io/code-designer-AI/showcase/vacheron.html) |
 
 ---
 

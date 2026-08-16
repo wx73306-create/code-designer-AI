@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apple 教育优惠商店 - Code Designer AI Preview</title>
+  <style>
+    :root {
+      --color-primary: #0071E3;
+      --color-primary-hover: #0077ED;
+      --color-bg-light: #FAFAFC;
+      --color-bg-dark: #161617;
+      --color-text-primary: #1D1D1F;
+      --color-text-secondary: #333336;
+      --color-text-secondary-dark: #E8E8ED;
+      --color-footer-bg: #F5F5F7;
+      --color-link: #06C;
+      --color-accent-blue: #2997FF;
+      --nav-bg: rgba(250,250,252,0.8);
+      --nav-bg-opened: rgba(250,250,252,0.92);
+      --nav-bg-dark: rgba(22,22,23,0.8);
+      --nav-text: rgba(0,0,0,0.8);
+      --max-width: 1024px;
+      --nav-height: 44px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif;
+      color: var(--color-text-primary);
+      background: #fff;
+      -webkit-font-smoothing: antialiased;
+      transition: background 0.3s, color 0.3s;
+    }
+    a { color: var(--color-link); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: var(--color-primary); text-decoration: underline; }
+
+    /* Dark mode */
+    .dark { --color-text-primary: #F5F5F7; --color-text-secondary: #A1A1A6; --nav-bg: rgba(22,22,23,0.8); --nav-bg-opened: rgba(22,22,23,0.88); --nav-text: rgba(255,255,255,0.8); --color-footer-bg: #1D1D1F; }
+    .dark body { background: #000; color: #F5F5F7; }
+
+    /* ===== Global Nav ===== */
+    .global-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: var(--nav-height);
+      background: var(--nav-bg);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .global-nav.scrolled { box-shadow: 0 0.5px 0 rgba(0,0,0,0.08); }
+    .dark .global-nav { background: var(--nav-bg-dark); }
+    .nav-inner {
+      max-width: var(--max-width); margin: 0 auto;
+      height: 100%; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px;
+    }
+    .nav-logo svg { width: 18px; height: 18px; fill: var(--nav-text); transition: fill 0.3s; }
+    .nav-links { display: flex; align-items: center; gap: 0; flex: 1; justify-content: center; }
+    .nav-links a {
+      font-size: 12px; color: var(--nav-text);
+      padding: 0 10px; text-decoration: none;
+      transition: color 0.2s; white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--color-text-primary); text-decoration: none; }
+    .nav-actions { display: flex; align-items: center; gap: 4px; }
+    .nav-btn {
+      width: 36px; height: 36px; border: none; background: transparent;
+      border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--nav-text); transition: background 0.2s, color 0.2s, transform 0.15s;
+    }
+    .nav-btn:hover { background: rgba(0,0,0,0.05); }
+    .dark .nav-btn:hover { background: rgba(255,255,255,0.1); }
+    .nav-btn:active { transform: scale(0.9); }
+    .nav-btn svg { width: 16px; height: 16px; }
+    .cart-badge {
+      position: relative;
+    }
+    .cart-count {
+      position: absolute; top: 2px; right: 2px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--color-primary); color: #fff;
+      font-size: 9px; font-weight: 600;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ===== Hero Banner ===== */
+    .hero {
+      position: relative; width: 100%; height: 640px;
+      overflow: hidden; margin-top: var(--nav-height);
+      background: linear-gradient(180deg, #f5f0eb 0%, #e8ddd3 30%, #d4c4b0 60%, #b8a48e 100%);
+    }
+    .dark .hero { background: linear-gradient(180deg, #1a1a1a 0%, #2d2520 30%, #3d3028 60%, #1a1510 100%); }
+    .hero-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.2) 100%);
+    }
+    .dark .hero-overlay { background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 100%); }
+    .hero-content {
+      position: relative; z-index: 2;
+      max-width: var(--max-width); margin: 0 auto;
+      padding: 0 22px; height: 100%;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .hero h1 {
+      font-size: 56px; font-weight: 700; line-height: 1.07;
+      letter-spacing: -0.005em; margin-bottom: 12px;
+      color: var(--color-text-primary); transition: color 0.3s;
+    }
+    .dark .hero h1 { color: #F5F5F7; }
+    .hero .subheadline {
+      font-size: 21px; line-height: 1.48;
+      color: var(--color-text-secondary); margin-bottom: 28px;
+      max-width: 540px; transition: color 0.3s;
+    }
+    .dark .hero .subheadline { color: var(--color-text-secondary-dark); }
+    .btn-primary {
+      display: inline-block; padding: 12px 28px;
+      background: var(--color-primary); color: #fff;
+      border-radius: 980px; font-size: 17px; font-weight: 400;
+      border: none; cursor: pointer;
+      transition: background 0.2s, transform 0.15s cubic-bezier(0.23,1,0.32,1);
+    }
+    .btn-primary:hover { background: var(--color-primary-hover); color: #fff; text-decoration: none; transform: scale(1.03); }
+    .btn-primary:active { transform: scale(0.97); }
+
+    /* ===== Product Grid ===== */
+    .products-section { padding: 64px 22px; }
+    .products-inner { max-width: var(--max-width); margin: 0 auto; }
+    .products-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
+    }
+    .product-card {
+      background: #fff; border-radius: 18px; overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      transition: transform 0.3s cubic-bezier(0.23,1,0.32,1), box-shadow 0.3s;
+      position: relative;
+    }
+    .product-card:hover { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(0,0,0,0.12); }
+    .dark .product-card { background: #1D1D1F; box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
+    .dark .product-card:hover { box-shadow: 0 16px 40px rgba(0,0,0,0.5); }
+    .product-img-wrap {
+      position: relative; aspect-ratio: 1; overflow: hidden;
+      background: #F5F5F7; transition: background 0.3s;
+    }
+    .dark .product-img-wrap { background: #2D2D2F; }
+    .product-img-inner {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.5s ease;
+    }
+    .product-card:hover .product-img-inner { transform: scale(1.05); }
+    .product-img-inner svg { width: 60%; height: 60%; }
+    /* Quick view overlay */
+    .quick-view-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.15);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .product-card:hover .quick-view-overlay { opacity: 1; }
+    .quick-view-btn {
+      padding: 8px 20px; background: #fff; border: none;
+      border-radius: 980px; font-size: 13px; font-weight: 500;
+      cursor: pointer; color: var(--color-text-primary);
+      transition: background 0.2s, transform 0.15s;
+    }
+    .quick-view-btn:hover { background: #f5f5f7; transform: scale(1.05); }
+    .product-info { padding: 16px 20px 20px; }
+    .color-selector { display: flex; gap: 8px; margin-bottom: 12px; }
+    .color-dot {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 2px solid #D2D2D7; cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .color-dot.active { border-color: var(--color-primary); transform: scale(1.15); }
+    .color-dot:hover { border-color: #86868B; }
+    .product-name {
+      font-size: 17px; font-weight: 600;
+      color: var(--color-text-primary); margin-bottom: 4px;
+      transition: color 0.3s;
+    }
+    .dark .product-name { color: #F5F5F7; }
+    .product-price {
+      font-size: 17px; font-weight: 600;
+      color: var(--color-text-primary); margin-bottom: 4px;
+      transition: color 0.3s;
+    }
+    .dark .product-price { color: #F5F5F7; }
+    .product-edu-price {
+      font-size: 14px; color: var(--color-link); margin-bottom: 8px;
+    }
+    .product-desc {
+      font-size: 13px; color: var(--color-text-secondary);
+      line-height: 1.5; margin-bottom: 16px;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+      transition: color 0.3s;
+    }
+    .dark .product-desc { color: var(--color-text-secondary-dark); }
+    .btn-buy {
+      width: 100%; padding: 10px 0; border: none;
+      background: var(--color-primary); color: #fff;
+      border-radius: 980px; font-size: 14px; font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .btn-buy:hover { background: var(--color-primary-hover); transform: scale(1.02); }
+    .btn-buy:active { transform: scale(0.97); }
+
+    /* ===== Feature Highlight ===== */
+    .feature-section { padding: 80px 22px; background: #F5F5F7; transition: background 0.3s; }
+    .dark .feature-section { background: #111; }
+    .feature-inner {
+      max-width: var(--max-width); margin: 0 auto;
+    }
+    .feature-block {
+      display: flex; align-items: center; gap: 48px;
+      margin-bottom: 64px;
+    }
+    .feature-block:last-child { margin-bottom: 0; }
+    .feature-block.reverse { flex-direction: row-reverse; }
+    .feature-media {
+      flex: 1; aspect-ratio: 4/3; border-radius: 18px;
+      overflow: hidden; position: relative;
+    }
+    .feature-media-bg {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .feature-text { flex: 1; }
+    .feature-text h2 {
+      font-size: 36px; font-weight: 700; line-height: 1.15;
+      margin-bottom: 16px; color: var(--color-text-primary);
+      transition: color 0.3s;
+    }
+    .dark .feature-text h2 { color: #F5F5F7; }
+    .feature-text p {
+      font-size: 17px; line-height: 1.65;
+      color: var(--color-text-secondary);
+      transition: color 0.3s;
+    }
+    .dark .feature-text p { color: var(--color-text-secondary-dark); }
+
+    /* ===== Footer ===== */
+    .footer {
+      background: var(--color-footer-bg); padding: 32px 22px;
+      border-top: 1px solid #D2D2D7;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .dark .footer { border-color: #333; }
+    .footer-inner { max-width: var(--max-width); margin: 0 auto; }
+    .footer-disclaimer {
+      font-size: 12px; line-height: 1.6;
+      color: var(--color-text-secondary); margin-bottom: 20px;
+      padding-bottom: 16px; border-bottom: 1px solid #D2D2D7;
+      transition: color 0.3s, border-color 0.3s;
+    }
+    .dark .footer-disclaimer { color: #86868B; border-color: #333; }
+    .footer-nav {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: 24px; padding-bottom: 20px;
+      border-bottom: 1px solid #D2D2D7; margin-bottom: 16px;
+      transition: border-color 0.3s;
+    }
+    .dark .footer-nav { border-color: #333; }
+    .footer-column h4 {
+      font-size: 12px; font-weight: 600; margin-bottom: 8px;
+      color: var(--color-text-primary); transition: color 0.3s;
+    }
+    .dark .footer-column h4 { color: #F5F5F7; }
+    .footer-column ul { list-style: none; }
+    .footer-column li { margin-bottom: 5px; }
+    .footer-column a { font-size: 12px; color: var(--color-text-secondary); transition: color 0.2s; }
+    .dark .footer-column a { color: #A1A1A6; }
+    .footer-column a:hover { color: var(--color-text-primary); text-decoration: underline; }
+    .footer-bottom {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .footer-bottom .copyright { font-size: 12px; color: var(--color-text-secondary); transition: color 0.3s; }
+    .dark .footer-bottom .copyright { color: #86868B; }
+    .footer-bottom-links { display: flex; gap: 16px; }
+    .footer-bottom-links a { font-size: 12px; color: var(--color-text-secondary); }
+    .dark .footer-bottom-links a { color: #86868B; }
+
+    /* ===== Scroll Reveal ===== */
+    .reveal {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.6s cubic-bezier(0.16,1,0.32,1), transform 0.6s cubic-bezier(0.16,1,0.32,1);
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-d1 { transition-delay: 0.1s; }
+    .reveal-d2 { transition-delay: 0.2s; }
+    .reveal-d3 { transition-delay: 0.3s; }
+    .reveal-d4 { transition-delay: 0.15s; }
+    .reveal-d5 { transition-delay: 0.25s; }
+    .reveal-d6 { transition-delay: 0.35s; }
+    .reveal-left { transform: translateX(-40px); }
+    .reveal-right { transform: translateX(40px); }
+    .reveal-left.visible, .reveal-right.visible { transform: translateX(0); }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 833px) {
+      .nav-links { display: none; }
+      .products-grid { grid-template-columns: repeat(2, 1fr); }
+      .hero h1 { font-size: 40px; }
+      .feature-block, .feature-block.reverse { flex-direction: column; }
+      .footer-nav { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 480px) {
+      .products-grid { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 32px; }
+      .hero { height: 480px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Global Nav -->
+  <nav class="global-nav" id="globalNav">
+    <div class="nav-inner">
+      <a class="nav-logo" href="#">
+        <svg viewBox="0 0 17 17"><path d="M14.94 12.09c-.06.14-.93 3.2-3.1 3.2-.58 0-1.04-.28-1.67-.28-.65 0-1.27.3-1.87.3-2.35 0-5.18-4.5-5.18-7.48 0-2.82 1.88-4.3 3.65-4.3.9 0 1.66.5 2.22.5.54 0 1.39-.56 2.47-.56.42 0 1.93.04 2.93 1.35-2.45 1.36-2.06 4.88.55 5.72v.05l-.01.05zM11 3.34C11.56 2.65 12 1.68 12 .72c0-.14-.01-.27-.04-.4C11.18.37 10.22.88 9.6 1.6c-.56.65-1.05 1.6-1.05 2.55 0 .15.02.3.04.35.04.01.13.03.22.03.77 0 1.66-.53 2.19-1.19z"/></svg>
+      </a>
+      <div class="nav-links">
+        <a href="#">商店</a><a href="#">Mac</a><a href="#">iPad</a><a href="#">iPhone</a><a href="#">Watch</a><a href="#">AirPods</a><a href="#">家居</a><a href="#">娱乐</a><a href="#">配件</a><a href="#">技术支持</a>
+      </div>
+      <div class="nav-actions">
+        <button class="nav-btn" aria-label="搜索">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        </button>
+        <button class="nav-btn" id="themeToggle" aria-label="切换主题">
+          <svg id="moonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+          <svg id="sunIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        </button>
+        <button class="nav-btn cart-badge" aria-label="购物车">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Banner -->
+  <section class="hero">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+      <h1 class="reveal">教育优惠<br>为校园而生</h1>
+      <p class="subheadline reveal reveal-d1">高校学生和教职员工可以优惠价格购买 Mac、iPad 及更多 Apple 产品。用更强大的工具，开启更出色的学习体验。</p>
+      <div class="reveal reveal-d2">
+        <a href="#" class="btn-primary">立即选购</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Product Grid -->
+  <section class="products-section">
+    <div class="products-inner">
+      <div class="products-grid">
+        <!-- MacBook Air -->
+        <div class="product-card reveal reveal-d1">
+          <div class="product-img-wrap">
+            <div class="product-img-inner">
+              <svg viewBox="0 0 120 85" fill="none"><rect x="10" y="5" width="100" height="58" rx="5" stroke="#1D1D1F" stroke-width="1.5" opacity="0.15"/><rect x="18" y="11" width="84" height="46" rx="2" fill="#1D1D1F" opacity="0.04"/><path d="M2 66h116c-2 10-12 14-22 14H24c-10 0-20-4-22-14z" fill="#1D1D1F" opacity="0.06"/></svg>
+            </div>
+            <div class="quick-view-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-info">
+            <div class="color-selector">
+              <span class="color-dot active" style="background:#2E3436" title="深空灰"></span>
+              <span class="color-dot" style="background:#E3CFB8" title="星光色"></span>
+              <span class="color-dot" style="background:#7BA3C9" title="蓝色"></span>
+            </div>
+            <h3 class="product-name">MacBook Air 15"</h3>
+            <div class="product-price">¥10,999</div>
+            <div class="product-edu-price">教育优惠：¥10,199</div>
+            <p class="product-desc">M3 芯片，15.3 英寸 Liquid Retina 显示屏，长达 18 小时电池续航。</p>
+            <button class="btn-buy">购买</button>
+          </div>
+        </div>
+        <!-- iPad Pro -->
+        <div class="product-card reveal reveal-d2">
+          <div class="product-img-wrap">
+            <div class="product-img-inner">
+              <svg viewBox="0 0 80 110" fill="none"><rect x="8" y="5" width="64" height="95" rx="8" stroke="#1D1D1F" stroke-width="1.5" opacity="0.15"/><rect x="14" y="13" width="52" height="72" rx="3" fill="#1D1D1F" opacity="0.04"/><circle cx="40" cy="93" r="3.5" stroke="#1D1D1F" stroke-width="1" opacity="0.15"/></svg>
+            </div>
+            <div class="quick-view-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-info">
+            <div class="color-selector">
+              <span class="color-dot active" style="background:#2E3436" title="深空灰"></span>
+              <span class="color-dot" style="background:#C0C0C0" title="银色"></span>
+            </div>
+            <h3 class="product-name">iPad Pro 13"</h3>
+            <div class="product-price">¥8,999</div>
+            <div class="product-edu-price">教育优惠：¥8,199</div>
+            <p class="product-desc">M4 芯片，Ultra Retina XDR 显示屏，Apple Pencil Pro 支持。</p>
+            <button class="btn-buy">购买</button>
+          </div>
+        </div>
+        <!-- MacBook Pro -->
+        <div class="product-card reveal reveal-d3">
+          <div class="product-img-wrap">
+            <div class="product-img-inner">
+              <svg viewBox="0 0 120 85" fill="none"><rect x="10" y="5" width="100" height="58" rx="5" stroke="#1D1D1F" stroke-width="1.5" opacity="0.15"/><rect x="18" y="11" width="84" height="46" rx="2" fill="#1D1D1F" opacity="0.04"/><path d="M2 66h116c-2 10-12 14-22 14H24c-10 0-20-4-22-14z" fill="#1D1D1F" opacity="0.06"/><circle cx="60" cy="66" r="2" fill="#1D1D1F" opacity="0.1"/></svg>
+            </div>
+            <div class="quick-view-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-info">
+            <div class="color-selector">
+              <span class="color-dot active" style="background:#2E3436" title="深空黑"></span>
+              <span class="color-dot" style="background:#C0C0C0" title="银色"></span>
+            </div>
+            <h3 class="product-name">MacBook Pro 14"</h3>
+            <div class="product-price">¥16,999</div>
+            <div class="product-edu-price">教育优惠：¥15,999</div>
+            <p class="product-desc">M4 Pro 芯片，Liquid Retina XDR 显示屏，为专业工作流而生。</p>
+            <button class="btn-buy">购买</button>
+          </div>
+        </div>
+        <!-- iPad Air -->
+        <div class="product-card reveal reveal-d4">
+          <div class="product-img-wrap">
+            <div class="product-img-inner">
+              <svg viewBox="0 0 80 110" fill="none"><rect x="8" y="5" width="64" height="95" rx="8" stroke="#1D1D1F" stroke-width="1.5" opacity="0.15"/><rect x="14" y="13" width="52" height="72" rx="3" fill="#1D1D1F" opacity="0.04"/><circle cx="40" cy="93" r="3.5" stroke="#1D1D1F" stroke-width="1" opacity="0.15"/></svg>
+            </div>
+            <div class="quick-view-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-info">
+            <div class="color-selector">
+              <span class="color-dot active" style="background:#7BA3C9" title="蓝色"></span>
+              <span class="color-dot" style="background:#C9A0DC" title="紫色"></span>
+              <span class="color-dot" style="background:#E3CFB8" title="星光色"></span>
+              <span class="color-dot" style="background:#2E3436" title="深空灰"></span>
+            </div>
+            <h3 class="product-name">iPad Air 13"</h3>
+            <div class="product-price">¥6,499</div>
+            <div class="product-edu-price">教育优惠：¥5,999</div>
+            <p class="product-desc">M2 芯片，Liquid Retina 显示屏，轻薄便携的全能之选。</p>
+            <button class="btn-buy">购买</button>
+          </div>
+        </div>
+        <!-- Apple Pencil -->
+        <div class="product-card reveal reveal-d5">
+          <div class="product-img-wrap">
+            <div class="product-img-inner">
+              <svg viewBox="0 0 120 120" fill="none"><rect x="52" y="10" width="16" height="90" rx="8" stroke="#1D1D1F" stroke-width="1.5" opacity="0.15"/><circle cx="60" cy="105" r="4" fill="#1D1D1F" opacity="0.06"/><rect x="55" y="14" width="10" height="6" rx="3" fill="#1D1D1F" opacity="0.08"/></svg>
+            </div>
+            <div class="quick-view-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-info">
+            <div class="color-selector">
+              <span class="color-dot active" style="background:#fff; border-color:#D2D2D7" title="白色"></span>
+            </div>
+            <h3 class="product-name">Apple Pencil Pro</h3>
+            <div class="product-price">¥999</div>
+            <div class="product-edu-price">教育优惠：¥899</div>
+            <p class="product-desc">轻捏、桶状旋转、触觉反馈，为 iPad 带来全新创作体验。</p>
+            <button class="btn-buy">购买</button>
+          </div>
+        </div>
+        <!-- AirPods Pro -->
+        <div class="product-card reveal reveal-d6">
+          <div class="product-img-wrap">
+            <div class="product-img-inner">
+              <svg viewBox="0 0 100 100" fill="none"><rect x="20" y="30" width="60" height="40" rx="16" stroke="#1D1D1F" stroke-width="1.5" opacity="0.15"/><ellipse cx="34" cy="22" rx="8" ry="14" stroke="#1D1D1F" stroke-width="1.2" opacity="0.12"/><ellipse cx="66" cy="22" rx="8" ry="14" stroke="#1D1D1F" stroke-width="1.2" opacity="0.12"/><circle cx="50" cy="52" r="2.5" fill="#1D1D1F" opacity="0.1"/></svg>
+            </div>
+            <div class="quick-view-overlay"><button class="quick-view-btn">快速查看</button></div>
+          </div>
+          <div class="product-info">
+            <div class="color-selector">
+              <span class="color-dot active" style="background:#fff; border-color:#D2D2D7" title="白色"></span>
+            </div>
+            <h3 class="product-name">AirPods Pro 2</h3>
+            <div class="product-price">¥1,899</div>
+            <div class="product-edu-price">教育优惠：¥1,799</div>
+            <p class="product-desc">自适应音频、个性化空间音频、USB-C 充电，沉浸听觉体验。</p>
+            <button class="btn-buy">购买</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature Highlight -->
+  <section class="feature-section">
+    <div class="feature-inner">
+      <div class="feature-block">
+        <div class="feature-media reveal reveal-left" style="background: linear-gradient(135deg, #E8E0D8, #D4C8BC);">
+          <div class="feature-media-bg">
+            <svg width="120" height="80" viewBox="0 0 120 80" fill="none"><rect x="5" y="5" width="110" height="55" rx="6" stroke="#8B7355" stroke-width="1.5" opacity="0.3"/><rect x="12" y="11" width="96" height="43" rx="3" fill="#8B7355" opacity="0.06"/><text x="60" y="38" text-anchor="middle" fill="#8B7355" font-size="14" font-weight="600" opacity="0.15">M4 Pro</text></svg>
+          </div>
+        </div>
+        <div class="feature-text reveal reveal-right">
+          <h2>Apple 芯片，<br>重新定义性能</h2>
+          <p>M 系列芯片为 Mac 和 iPad 带来了前所未有的性能与能效。无论是复杂的编程项目、专业级的视频剪辑，还是日常的多任务处理，都能流畅应对。配合教育优惠，让每位学生都能拥有专业级的创作工具。</p>
+        </div>
+      </div>
+      <div class="feature-block reverse">
+        <div class="feature-media reveal reveal-right" style="background: linear-gradient(135deg, #D8E0E8, #BCc8d4);">
+          <div class="feature-media-bg">
+            <svg width="80" height="100" viewBox="0 0 80 100" fill="none"><rect x="8" y="5" width="64" height="85" rx="10" stroke="#556B8B" stroke-width="1.5" opacity="0.3"/><rect x="14" y="14" width="52" height="62" rx="3" fill="#556B8B" opacity="0.06"/><text x="40" y="50" text-anchor="middle" fill="#556B8B" font-size="12" font-weight="600" opacity="0.15">Apple Intelligence</text></svg>
+          </div>
+        </div>
+        <div class="feature-text reveal reveal-left">
+          <h2>Apple Intelligence，<br>你的 AI 助手</h2>
+          <p>Apple Intelligence 深度集成于 macOS 和 iPadOS，帮助你写作、总结、创作。从智能摘要到图像生成，AI 功能与隐私保护并行，让学习和工作更加高效。这是属于每个人的个人化智能体验。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-disclaimer">
+        <p>* 教育优惠适用于经核实的高校学生、已被录取的学生、教职员工，以及各级学校。优惠资格通过 UNiDAYS 验证。购买数量限制可能适用。价格已含增值税。</p>
+      </div>
+      <div class="footer-nav">
+        <div class="footer-column">
+          <h4>选购及了解</h4>
+          <ul>
+            <li><a href="#">商店</a></li>
+            <li><a href="#">Mac</a></li>
+            <li><a href="#">iPad</a></li>
+            <li><a href="#">iPhone</a></li>
+            <li><a href="#">Watch</a></li>
+            <li><a href="#">AirPods</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h4>服务</h4>
+          <ul>
+            <li><a href="#">Apple Music</a></li>
+            <li><a href="#">Apple TV+</a></li>
+            <li><a href="#">iCloud+</a></li>
+            <li><a href="#">Apple One</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h4>Apple Store</h4>
+          <ul>
+            <li><a href="#">查找零售店</a></li>
+            <li><a href="#">Genius Bar</a></li>
+            <li><a href="#">Today at Apple</a></li>
+            <li><a href="#">Apple Camp</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h4>账户</h4>
+          <ul>
+            <li><a href="#">管理 Apple ID</a></li>
+            <li><a href="#">Apple Store 账户</a></li>
+            <li><a href="#">iCloud.com</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h4>关于 Apple</h4>
+          <ul>
+            <li><a href="#">新闻稿</a></li>
+            <li><a href="#">领导团队</a></li>
+            <li><a href="#">工作机会</a></li>
+            <li><a href="#">联系 Apple</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span class="copyright">Copyright &copy; 2026 Apple Inc. 保留所有权利。</span>
+        <div class="footer-bottom-links">
+          <a href="#">隐私政策</a>
+          <a href="#">使用条款</a>
+          <a href="#">销售政策</a>
+          <a href="#">网站地图</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ===== Theme Toggle =====
+    const toggle = document.getElementById('themeToggle');
+    const moonIcon = document.getElementById('moonIcon');
+    const sunIcon = document.getElementById('sunIcon');
+    let isDark = false;
+    toggle.addEventListener('click', () => {
+      isDark = !isDark;
+      document.documentElement.classList.toggle('dark', isDark);
+      moonIcon.style.display = isDark ? 'none' : 'block';
+      sunIcon.style.display = isDark ? 'block' : 'none';
+    });
+
+    // ===== Nav scroll =====
+    const nav = document.getElementById('globalNav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 10);
+    });
+
+    // ===== Color Selector =====
+    document.querySelectorAll('.color-selector').forEach(sel => {
+      sel.querySelectorAll('.color-dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+          sel.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+          dot.classList.add('active');
+        });
+      });
+    });
+
+    // ===== Scroll Reveal =====
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '-40px' });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
