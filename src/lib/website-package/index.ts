@@ -1,0 +1,46 @@
+/**
+ * Website Intelligence Package — Public API
+ * ===================================================================
+ * Phase 3 中间层的统一入口：
+ *
+ *   buildWebsitePackage(scraped)  →  WebsitePackage
+ *   formatPackageContext(pkg)     →  Agent 提示词
+ */
+
+export { buildWebsitePackage } from './adapter';
+export type { BuildPackageInput } from './adapter';
+
+/** 交互产物 → InteractionPackage 的归一化入口（Agent 不直接读 interaction.json）。 */
+export { buildInteractionPackage, RESTORED_FROM_EXPORT } from './interaction-adapter';
+
+export {
+  formatPackageContext,
+  formatPackageContextCompact,
+  formatInteractionContext,
+} from './formatter';
+export type { InteractionContextLevel } from './formatter';
+
+export {
+  WEBSITE_PACKAGE_VERSION,
+  createEmptyPackage,
+} from '@/types/website-package';
+export type {
+  WebsitePackage,
+  ScreenshotData,
+  AssetData,
+  DOMAnalysis,
+  SectionInfo,
+  SectionRole,
+  LayoutAnalysis,
+  LayoutBlock,
+  PageMetadata,
+  StyleAnalysis,
+  ColorInfo,
+  FontInfo,
+  SpacingInfo,
+  DesignSystem,
+  ComponentPlan,
+  ComponentNode,
+  ComponentFile,
+  AnimationData,
+} from '@/types/website-package';

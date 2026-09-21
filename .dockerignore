@@ -3,5 +3,20 @@ node_modules
 .git
 .env
 .env.local
+# 防御性排除：避免任何含明文的 .env.*（尤其 .env.production / .env.*.local）
+# 被打包进镜像。即便 standalone 构建当前不会追踪它们，未来若改动 Dockerfile
+# 的 COPY 指令也绝不会意外泄露生产密钥。
+.env.*
+!.env.example
 deploy/deploy.zip
 *.md
+# 本地调试/构建产生的临时产物，不进入构建上下文
+*.bak
+_mimo_*.json
+_home.*
+# 本会话/历史调试留下的截图与一次性脚本（避免打进构建上下文）
+.review/
+_ui_shots/
+_gen.js
+_probe.js
+_shot.js

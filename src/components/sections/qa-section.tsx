@@ -19,12 +19,15 @@ import {
   AlertTriangle,
   Crown,
   Camera,
+  Wand2,
+  Layers,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { cn } from "@/lib/utils";
 import { mockQAIssues, mockQAFixes, mockGeneratedCode, mockVisualScore } from "@/lib/mock-data";
 import { useAgentStore } from "@/store/agent-store";
+import { triggerManualOptimization, applyOptimizationPlan } from "@/store/use-workflow";
 import { buildPreviewHtml } from "@/lib/preview-utils";
 import { DIMENSION_LABELS } from "@/lib/visual-evaluation";
 import type { VisualScoreDimensions } from "@/types/agent";
@@ -46,6 +49,24 @@ const statusIcons = {
   "in-progress": Loader2,
 };
 
+/**
+ * Sprint B.1：分值与色调的唯一映射，质量分与还原度共用（避免两处各写一套阈值）。
+ * `v === null`（未采集 / 无法度量）一律走灰色 —— 「unknown 不是 guess」，
+ * 绝不用 0 分或灰条长度冒充一个不存在的分数。
+ */
+function scoreTone(v: number | null, degraded = false): { text: string; bar: string } {
+  if (degraded || v === null) {
+    return { text: 'text-black/30', bar: 'bg-black/[0.12]' };
+  }
+  if (v >= 95) {
+    return { text: 'text-[#34C759]', bar: 'bg-gradient-to-r from-[#34C759] to-[#30D158] shadow-[0_0_24px_rgba(52,199,89,0.5)]' };
+  }
+  if (v >= 80) {
+    return { text: 'text-[#FF9500]', bar: 'bg-gradient-to-r from-[#FF9500] to-[#FFB340] shadow-[0_0_24px_rgba(255,149,0,0.5)]' };
+  }
+  return { text: 'text-[#FF3B30]', bar: 'bg-gradient-to-r from-[#FF3B30] to-[#FF6961] shadow-[0_0_24px_rgba(255,59,48,0.5)]' };
+}
+
 // =============================================================================
 // QA Content (workspace tab) — fully dynamic, reads from store
 // =============================================================================
@@ -55,9 +76,18 @@ export function QAContent() {
   const taskUrl = useAgentStore((s) => s.task.url);
   const generatedCode = useAgentStore((s) => s.task.generatedCode);
   const [iframeError, setIframeError] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
 
   // --- Data from store (with mock fallback) ---
-  const similarity = qaResult?.similarity ?? 96.8;
+  // Sprint B.1：similarity 字段是历史错位（装的是 quality 分），新代码读 qualityScore /
+  // reconstructionScore（见 QAResult 注释）。mock 态保留 96.8 演示值；AI 态缺分显示 null，
+  // 绝不编造（「unknown 不是 guess」与 reconstruction 侧同一原则）。
+  const qualityScore: number | null = qaResult
+    ? (qaResult.qualityScore ?? qaResult.similarity ?? null)
+    : 96.8;
+  const reconScore: number | null = qaResult?.reconstructionScore?.score ?? null;
+  const reconUnavailable = !!qaResult && qaResult.reconstructionScore != null && reconScore === null;
+  const reconTone = scoreTone(reconScore, reconUnavailable);
   const issues = qaResult?.issues ?? mockQAIssues;
   const fixes = qaResult?.fixes ?? mockQAFixes;
   const fixedCount = fixes.filter((f) => f.applied).length;
@@ -66,6 +96,20 @@ export function QAContent() {
   const isAI = !!qaResult;
   const visualScore = qaResult?.visualScore ?? mockVisualScore;
   const optimizationRounds = qaResult?.optimizationRounds ?? 0;
+  const optimizationPlan = useAgentStore((s) => s.task.optimizationPlan);
+
+  // --- Phase 7：手动优化（绝不自动触发）---
+  const handleGeneratePlan = async () => {
+    setOptimizing(true);
+    try {
+      await triggerManualOptimization();
+    } finally {
+      setOptimizing(false);
+    }
+  };
+  const handleApplyPlan = () => {
+    applyOptimizationPlan();
+  };
 
   // --- Build preview HTML for the generated code panel ---
   const codeMap = generatedCode ?? mockGeneratedCode;
@@ -83,14 +127,14 @@ export function QAContent() {
         {
           name: "视觉对比",
           icon: Eye,
-          percentage: metrics?.visual ?? similarity,
-          status: (metrics?.visual ?? similarity) >= 90 ? 'pass' : 'fail',
+          percentage: metrics?.visual ?? qualityScore ?? 0,
+          status: (metrics?.visual ?? qualityScore ?? 0) >= 90 ? 'pass' : 'fail',
         },
         {
           name: "响应式布局",
           icon: Monitor,
-          percentage: metrics?.responsive ?? Math.max(similarity - 3, 85),
-          status: (metrics?.responsive ?? similarity - 3) >= 90 ? 'pass' : 'fail',
+          percentage: metrics?.responsive ?? Math.max((qualityScore ?? 90) - 3, 85),
+          status: (metrics?.responsive ?? (qualityScore ?? 90) - 3) >= 90 ? 'pass' : 'fail',
         },
         {
           name: "性能优化",
@@ -135,7 +179,7 @@ export function QAContent() {
       { name: "代码规范", icon: FileCode, percentage: 99.3, status: 'pass' },
       { name: "图片优化", icon: Image, percentage: 97.6, status: 'pass' },
     ];
-  }, [qaResult, similarity, isAI]);
+  }, [qaResult, qualityScore, isAI]);
 
   // --- Extract hostname for display ---
   const hostname = useMemo(() => {
@@ -209,8 +253,8 @@ export function QAContent() {
               sandbox="allow-scripts"
               title="Generated preview"
             />
-            {/* Overlay check if similarity is high */}
-            {similarity >= 90 && (
+            {/* Overlay check if visual quality is high */}
+            {(qualityScore ?? 0) >= 90 && (
               <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-[#34C759]/90 flex items-center justify-center shadow-lg">
                 <CheckCircle2 className="w-4 h-4 text-white" />
               </div>
@@ -291,8 +335,54 @@ export function QAContent() {
           <p className="text-[11px] text-black/40 leading-relaxed">
             {visualScore.scores.premium_score >= 80
               ? "达到 Apple / Linear / Stripe 级别的设计水准"
-              : "存在模板感，将触发自动优化闭环"}
+              : "存在模板感，可在下方手动生成优化方案"}
           </p>
+        </div>
+      </div>
+
+      {/* ─── 还原度（Sprint B.1）───
+          与质量分并列展示，不合并、不互相替代：
+          质量分 = 这个页面设计得好吗；还原度 = 像不像原网页。
+          无法度量时给原因，不编造分数。 */}
+      <div className="rounded-xl border border-black/[0.06] bg-white/75 backdrop-blur-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-[#0071E3]" />
+            <span className="text-sm font-medium text-black/70">还原度</span>
+            <span className="text-[11px] font-normal text-black/30">
+              {reconUnavailable
+                ? `无法度量（${qaResult?.reconstructionScore?.reason ?? 'unknown'}）`
+                : '像不像原网页'}
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className={cn("text-3xl font-extrabold tabular-nums", reconTone.text)}>
+              {reconScore === null ? '—' : reconScore}
+            </span>
+            {reconScore !== null && (
+              <span className={cn("text-lg font-semibold", reconTone.text)}>%</span>
+            )}
+          </div>
+        </div>
+        <div className="h-3 rounded-full bg-black/[0.06] overflow-hidden">
+          <motion.div
+            initial={{ width: '0%' }}
+            animate={{ width: reconScore === null ? '0%' : `${reconScore}%` }}
+            transition={{ delay: 0.3, duration: 1, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className={cn("h-full rounded-full", reconTone.bar)}
+          />
+        </div>
+        <div className="flex items-center justify-between mt-2 text-[11px] text-black/30">
+          <span>
+            {reconUnavailable
+              ? '渲染降级或原站真值缺失，本轮不产出还原度'
+              : reconScore === null
+                ? '需完成一次 AI 生成后才有还原度'
+                : '由 Reconstruction Diff 与原站真值对比得出'}
+          </span>
+          {isAI
+            ? <span className="text-[#0071E3] font-medium">Reconstruction Diff</span>
+            : <span>未采集</span>}
         </div>
       </div>
 
@@ -352,6 +442,112 @@ export function QAContent() {
         </div>
       )}
 
+      {/* ─── 优化方案（Phase 7：手动触发）─── */}
+      <div className="rounded-xl border border-black/[0.06] bg-white/75 backdrop-blur-xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Wand2 className="w-4 h-4 text-[#6B5CE7]" />
+          <h3 className="text-sm font-medium text-black/80">优化方案</h3>
+          <span className="text-[11px] text-black/30 ml-auto">手动触发 · 不会自动重新生成</span>
+        </div>
+
+        {optimizationPlan ? (
+          <>
+            <p className="text-[12px] text-black/60 leading-relaxed mb-2">
+              <span className="font-medium text-black/75">根因：</span>
+              {optimizationPlan.diagnosis.rootCause}
+            </p>
+            {optimizationPlan.diagnosis.affectedAreas.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {optimizationPlan.diagnosis.affectedAreas.map((area) => (
+                  <span
+                    key={area}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-black/[0.04] text-black/45"
+                  >
+                    {area}
+                  </span>
+                ))}
+              </div>
+            )}
+            {optimizationPlan.diagnosis.designDNAAtRisk && (
+              <p className="text-[11px] text-[#FF9500] mb-3">
+                ⚠️ 方案标注：设计 DNA 存在流失风险，应用时请保留原站核心视觉特征
+              </p>
+            )}
+
+            <div className="space-y-0 mb-4">
+              {optimizationPlan.items.map((item, idx) => (
+                <div
+                  key={item.problem + idx}
+                  className="py-2.5 border-b border-black/[0.04] last:border-0 px-2 rounded-lg hover:bg-black/[0.02] transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 border",
+                        item.priority === "P0"
+                          ? "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/20"
+                          : item.priority === "P1"
+                            ? "bg-[#FF9500]/10 text-[#FF9500] border-[#FF9500]/20"
+                            : "bg-black/[0.04] text-black/45 border-black/[0.08]",
+                      )}
+                    >
+                      {item.priority}
+                    </span>
+                    <span className="text-[12px] font-medium text-black/80">{item.problem}</span>
+                  </div>
+                  {item.after && (
+                    <p className="text-[11px] text-black/40 mt-1 pl-1">→ {item.after}</p>
+                  )}
+                  {item.expectedImpact && (
+                    <p className="text-[11px] text-[#34C759]/80 mt-0.5 pl-1">{item.expectedImpact}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={handleApplyPlan}
+                disabled={optimizing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6B5CE7] text-white text-[12px] font-medium hover:bg-[#5B4BD7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                应用并重新生成
+              </button>
+              <button
+                onClick={handleGeneratePlan}
+                disabled={optimizing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-black/[0.08] text-black/60 text-[12px] font-medium hover:bg-black/[0.03] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {optimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                {optimizing ? "生成中..." : "重新分析"}
+              </button>
+              <span className="text-[11px] text-black/30 ml-auto">
+                第 {optimizationPlan.round} 轮 · 预计 +{optimizationPlan.estimatedScoreIncrease} 分
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-[11px] text-black/40 leading-relaxed mb-3">
+              基于上方六维评分，让 Optimization Agent 输出带优先级的具体修复方案。
+              生成后由你决定是否应用 —— 系统不会自动重新生成。
+            </p>
+            <button
+              onClick={handleGeneratePlan}
+              disabled={optimizing || !isAI}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6B5CE7] text-white text-[12px] font-medium hover:bg-[#5B4BD7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {optimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+              {optimizing ? "生成中..." : "生成优化方案"}
+            </button>
+            {!isAI && (
+              <span className="text-[11px] text-black/30 ml-2">需先完成一次 AI 生成</span>
+            )}
+          </>
+        )}
+      </div>
+
       {/* ─── Repair log ─── */}
       <div className="rounded-xl border border-black/[0.06] bg-white/75 backdrop-blur-xl p-5">
         <div className="flex items-center gap-2 mb-4">
@@ -397,7 +593,13 @@ export function QASection() {
   const generatedCode = useAgentStore((s) => s.task.generatedCode);
   const [iframeError, setIframeError] = useState(false);
 
-  const similarity = qaResult?.similarity ?? 96.8;
+  // Sprint B.1：与 QAContent 同口径 —— AI 态读 qualityScore / reconstructionScore，
+  // 缺分显示 null 不编造；mock 态保留 96.8 演示值。
+  const qualityScore: number | null = qaResult
+    ? (qaResult.qualityScore ?? qaResult.similarity ?? null)
+    : 96.8;
+  const reconScore: number | null = qaResult?.reconstructionScore?.score ?? null;
+  const reconUnavailable = !!qaResult && qaResult.reconstructionScore != null && reconScore === null;
   const issues = qaResult?.issues ?? mockQAIssues;
   const fixes = qaResult?.fixes ?? mockQAFixes;
   const fixedIssues = issues.filter((i) => i.fixed).length;
@@ -528,7 +730,7 @@ export function QASection() {
                   sandbox="allow-scripts"
                   title="Generated preview"
                 />
-                {similarity >= 90 && (
+                {(qualityScore ?? 0) >= 90 && (
                   <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[#34C759]/90 flex items-center justify-center shadow-lg">
                     <CheckCircle2 className="w-5 h-5 text-white" />
                   </div>
@@ -537,7 +739,8 @@ export function QASection() {
             </GlassCard>
           </div>
 
-          {/* Similarity bar */}
+          {/* Score card — Sprint B.1：质量分与还原度是两个指标，分开显示。
+              AI 态缺分显示「—」不编造；还原度无法度量时说明原因而不是装作有分。 */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -545,35 +748,52 @@ export function QASection() {
             className="mt-6"
           >
             <GlassCard className="p-5">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-medium text-black/70">{"视觉还原度"}</span>
-                <div className="flex items-baseline gap-1">
-                  <span className={cn(
-                    "text-4xl font-extrabold tabular-nums",
-                    similarity >= 95 ? "text-[#34C759]" : similarity >= 80 ? "text-[#FF9500]" : "text-[#FF3B30]"
-                  )}>
-                    {similarity}
-                  </span>
-                  <span className={cn(
-                    "text-xl font-semibold",
-                    similarity >= 95 ? "text-[#34C759]/60" : similarity >= 80 ? "text-[#FF9500]/60" : "text-[#FF3B30]/60"
-                  )}>%</span>
-                </div>
-              </div>
-              <div className="h-4 rounded-full bg-black/[0.06] overflow-hidden">
-                <motion.div
-                  initial={{ width: "0%" }}
-                  animate={{ width: `${similarity}%` }}
-                  transition={{ delay: 0.6, duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-                  className={cn(
-                    "h-full rounded-full",
-                    similarity >= 95 ? "bg-gradient-to-r from-[#34C759] to-[#30D158] shadow-[0_0_24px_rgba(52,199,89,0.5)]" :
-                    similarity >= 80 ? "bg-gradient-to-r from-[#FF9500] to-[#FFB340] shadow-[0_0_24px_rgba(255,149,0,0.5)]" :
-                    "bg-gradient-to-r from-[#FF3B30] to-[#FF6961] shadow-[0_0_24px_rgba(255,59,48,0.5)]"
-                  )}
-                />
-              </div>
-              <div className="flex items-center justify-between mt-2 text-[11px] text-black/30">
+              {[
+                {
+                  label: '视觉质量分',
+                  hint: '这个网页设计得好吗',
+                  value: qualityScore,
+                  degraded: false,
+                },
+                {
+                  label: '还原度',
+                  hint: reconUnavailable
+                    ? `无法度量（${qaResult?.reconstructionScore?.reason ?? 'unknown'}）`
+                    : '像不像原网页',
+                  value: reconScore,
+                  degraded: reconUnavailable,
+                },
+              ].map((row) => {
+                const v = row.value;
+                const tone = scoreTone(v, row.degraded);
+                return (
+                  <div key={row.label} className={cn(row.label === '还原度' && 'mt-5')}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-black/70">
+                        {row.label}
+                        <span className="ml-2 text-[11px] font-normal text-black/30">{row.hint}</span>
+                      </span>
+                      <div className="flex items-baseline gap-1">
+                        <span className={cn('text-3xl font-extrabold tabular-nums', tone.text)}>
+                          {v === null ? '—' : v}
+                        </span>
+                        {v !== null && (
+                          <span className={cn('text-lg font-semibold', tone.text)}>%</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-3 rounded-full bg-black/[0.06] overflow-hidden">
+                      <motion.div
+                        initial={{ width: '0%' }}
+                        animate={{ width: v === null ? '0%' : `${v}%` }}
+                        transition={{ delay: 0.6, duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+                        className={cn('h-full rounded-full', tone.bar)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex items-center justify-between mt-3 text-[11px] text-black/30">
                 <span>{"已检测"} {issues.length} {"个问题，修复"} {fixedIssues} {"个"}</span>
                 {qaResult ? <span className="text-[#34C759] font-medium">AI 分析结果</span> : <span>{"阈值: 95%"}</span>}
               </div>

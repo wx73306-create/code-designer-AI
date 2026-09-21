@@ -58,7 +58,6 @@ const PIPELINE: Array<{ key: string; label: string; icon: LucideIcon; color: str
   { key: 'browser', label: 'Browser Agent', icon: Globe, color: '#0071E3', desc: '网页读取 · DOM/CSS 抓取' },
   { key: 'vision', label: 'Vision Agent', icon: Eye, color: '#AF52DE', desc: '视觉识别 · 设计系统分析' },
   { key: 'stylematcher', label: 'Style Matcher', icon: Palette, color: '#FF6482', desc: '设计体系匹配 · 四维评分' },
-  { key: 'critic', label: 'Design Critic', icon: Sparkles, color: '#FFD60A', desc: '设计评审 · 决策输出' },
   { key: 'planning', label: 'Planning Agent', icon: Brain, color: '#FF9500', desc: '架构规划 · 组件树' },
   { key: 'code', label: 'Code Agent', icon: Code2, color: '#34C759', desc: '代码生成 · React 项目' },
   { key: 'qa', label: 'Visual QA', icon: ShieldCheck, color: '#FF3B30', desc: '视觉评分 · 六维评价' },

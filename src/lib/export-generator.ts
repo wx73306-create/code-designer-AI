@@ -19,6 +19,30 @@ export interface ExportData {
 }
 
 // =====================================================================
+// Sprint B.1 — 质量分与还原度是两个指标，导出时分开写
+// =====================================================================
+
+/**
+ * 视觉质量分：这个网页设计得好吗？
+ * `similarity` 是历史错位字段（装的一直是质量分），仅作兜底，不新写。
+ */
+function formatQualityScore(qa: QAResult): string {
+  const v = qa.qualityScore ?? qa.similarity;
+  return v == null ? '—' : `${v}%`;
+}
+
+/**
+ * 还原度：像不像原网页？
+ * 缺失 / 无法度量一律输出「—（原因）」—— 无法度量不等于 0 分，导出里也不编造数字。
+ */
+function formatReconstructionScore(qa: QAResult): string {
+  const r = qa.reconstructionScore;
+  if (r == null) return '—（未采集）';
+  if (r.score == null) return `—（无法度量：${r.reason ?? 'unknown'}）`;
+  return `${r.score}%`;
+}
+
+// =====================================================================
 // JSON Exports — Real design tokens from analysis
 // =====================================================================
 
@@ -457,7 +481,8 @@ export function generateAIPrompt(data: ExportData, target: 'cursor' | 'claude' |
 
   if (data.qaResult) {
     md += `## Quality Metrics\n\n`;
-    md += `- Visual Similarity: ${data.qaResult.similarity}%\n`;
+    md += `- Visual Quality Score: ${formatQualityScore(data.qaResult)}\n`;
+    md += `- Reconstruction Fidelity: ${formatReconstructionScore(data.qaResult)}\n`;
     if (data.qaResult.accessibilityScore !== undefined) md += `- Accessibility: ${data.qaResult.accessibilityScore}/100\n`;
     if (data.qaResult.performanceScore !== undefined) md += `- Performance: ${data.qaResult.performanceScore}/100\n`;
     if (data.qaResult.issues?.length) {
@@ -528,7 +553,8 @@ export function generateProjectSummary(data: ExportData): string {
   // QA summary
   if (data.qaResult) {
     md += `## Quality Assessment\n\n`;
-    md += `- Visual similarity: ${data.qaResult.similarity}%\n`;
+    md += `- Visual Quality Score: ${formatQualityScore(data.qaResult)}\n`;
+    md += `- Reconstruction Fidelity: ${formatReconstructionScore(data.qaResult)}\n`;
     md += `- Issues: ${data.qaResult.issues?.length || 0}\n`;
     md += `- Auto-fixes: ${data.qaResult.fixes?.length || 0}\n`;
     if (data.qaResult.accessibilityScore !== undefined) md += `- Accessibility score: ${data.qaResult.accessibilityScore}/100\n`;
@@ -560,7 +586,7 @@ export async function generateProjectZip(data: ExportData): Promise<Blob> {
   if (data.generatedCode) {
     for (const [rawFilename, code] of data.generatedCode.entries()) {
       // Flatten src/src/ → src/ (fix double nesting)
-      let filename = rawFilename.replace(/^src\/src\//, 'src/');
+      const filename = rawFilename.replace(/^src\/src\//, 'src/');
 
       if (filename.includes('/')) {
         // Determine category by path
@@ -927,7 +953,8 @@ ${analysis.animations?.length ? `<h2>Animations</h2><table><thead><tr><th>Name</
 ${data.qaResult ? `
 <h2>Quality Assessment</h2>
 <div class="stats">
-  <div class="stat-card"><div class="stat-value">${data.qaResult.similarity}%</div><div class="stat-label">Visual Similarity</div></div>
+  <div class="stat-card"><div class="stat-value">${formatQualityScore(data.qaResult)}</div><div class="stat-label">Visual Quality</div></div>
+  <div class="stat-card"><div class="stat-value">${formatReconstructionScore(data.qaResult)}</div><div class="stat-label">Reconstruction</div></div>
   ${data.qaResult.accessibilityScore !== undefined ? `<div class="stat-card"><div class="stat-value">${data.qaResult.accessibilityScore}</div><div class="stat-label">Accessibility</div></div>` : ''}
   ${data.qaResult.performanceScore !== undefined ? `<div class="stat-card"><div class="stat-value">${data.qaResult.performanceScore}</div><div class="stat-label">Performance</div></div>` : ''}
 </div>

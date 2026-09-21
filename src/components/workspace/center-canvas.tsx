@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, Palette, Sparkles, GitBranch, Code2, ShieldCheck, Download, MonitorPlay, Monitor, Tablet, Smartphone, ExternalLink } from 'lucide-react';
+import { Eye, Palette, GitBranch, Code2, ShieldCheck, Download, MonitorPlay, Monitor, Tablet, Smartphone, ExternalLink } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/agent-store';
 import { cn } from '@/lib/utils';
 import { DesignAnalysisContent } from '@/components/sections/design-analysis-section';
 import { StyleMatchContent } from '@/components/sections/style-match-section';
-import { DesignDecisionContent } from '@/components/sections/design-decision-section';
 import { ComponentTreeContent } from '@/components/sections/component-tree-section';
 import { CodeContent } from '@/components/sections/code-section';
 import { QAContent } from '@/components/sections/qa-section';
@@ -26,7 +25,6 @@ interface TabDef {
 const TABS: TabDef[] = [
   { id: 'analysis', label: '设计分析', icon: Eye, color: '#AF52DE', agentId: 'vision' },
   { id: 'stylematcher', label: '设计体系', icon: Palette, color: '#FF6482', agentId: 'stylematcher' },
-  { id: 'critic', label: '设计决策', icon: Sparkles, color: '#FFD60A', agentId: 'critic' },
   { id: 'components', label: '项目结构', icon: GitBranch, color: '#FF9500', agentId: 'planning' },
   { id: 'code', label: '代码生成', icon: Code2, color: '#34C759', agentId: 'code' },
   { id: 'preview', label: '实时预览', icon: MonitorPlay, color: '#30D158', agentId: 'preview' },
@@ -74,8 +72,8 @@ export function CenterCanvas() {
           <div className="w-16 h-16 rounded-2xl bg-white border border-black/[0.06] flex items-center justify-center mx-auto mb-4">
             <div className="w-6 h-6 rounded-full border-2 border-[#0071E3] border-t-transparent animate-spin" />
           </div>
-          <p className="text-sm text-black/40">Agent 正在工作中...</p>
-          <p className="text-xs text-black/20 mt-1">结果将在此处实时展示</p>
+          <p className="text-sm text-black/55">Agent 正在工作中...</p>
+          <p className="text-xs text-black/40 mt-1">结果将在此处实时展示</p>
         </div>
       </div>
     );
@@ -129,7 +127,6 @@ export function CenterCanvas() {
         >
           {activeTab === 'analysis' && <DesignAnalysisContent />}
           {activeTab === 'stylematcher' && <StyleMatchContent />}
-          {activeTab === 'critic' && <DesignDecisionContent />}
           {activeTab === 'components' && <ComponentTreeContent />}
           {activeTab === 'code' && <CodeContent />}
           {activeTab === 'qa' && <QAContent />}

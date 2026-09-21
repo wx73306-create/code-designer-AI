@@ -51,17 +51,43 @@ export function buildVisualEvaluationSystemPrompt(): string {
 
 /**
  * 构建视觉评价用户消息。
- * 输入：网页预览 HTML + Design Analysis Report + Design System。
+ *
+ * ## 输入口径（Sprint B 起：QA | Screenshot → Diff Report → HTML）
+ *
+ * 系统会同时注入**两张真实截图**（原站 + 生成页）作为多模态输入。
+ * 若 `diffReportJson` 可用，还原度报告是**主要依据**，HTML 源码降级为
+ * 4KB 节选的辅助参考 —— 因为「读 HTML 源码判断视觉效果」本身就是自相矛盾的：
+ * 系统提示词明写着「你的任务不是评价代码，你的任务是评价网页视觉质量」。
+ *
+ * 没有 diff 报告时（开关未开 / 采集失败）退回旧口径，保证行为不退化。
  */
 export function buildVisualEvaluationUserMessage(
   previewHtml: string,
   designAnalysisSummary: string,
   designSystemSummary: string,
   round?: number,
+  diffReportJson?: string,
 ): string {
+  const hasDiff = Boolean(diffReportJson && diffReportJson.trim());
+
   let msg = `请评价以下生成网页的视觉质量。\n\n`;
 
-  msg += `## 网页渲染结果（HTML 结构）\n\`\`\`html\n${previewHtml.slice(0, 12000)}\n\`\`\`\n\n`;
+  if (hasDiff) {
+    // 主要依据：两张截图（由系统作为图像注入）+ 结构化还原度报告
+    msg += `## 📸 已附上两张截图：原站（Original）与生成页（Clone）\n\n`;
+    msg += `**请先仔细对比这两张截图**，它们是本次评审的主要依据。\n\n`;
+
+    msg += `## 还原度 Diff 报告（结构化对比结果）\n\`\`\`json\n${diffReportJson}\n\`\`\`\n\n`;
+    msg += `报告中的 notes 字段是**可以直接指导修改的清单**（例如 hero height -23%、\n`;
+    msg += `feature columns 3→4、+rounded、cta missing）。九维分数越低，说明该维度与原站差异越大。\n\n`;
+  }
+
+  // HTML：有 diff 时降级为辅助（4KB 节选），没有时维持旧口径
+  const htmlLimit = hasDiff ? 4000 : 12000;
+  const htmlTitle = hasDiff
+    ? `## 生成页 HTML 源码（**辅助参考**，以截图与 Diff 报告为准）`
+    : `## 网页渲染结果（HTML 结构）`;
+  msg += `${htmlTitle}\n\`\`\`html\n${previewHtml.slice(0, htmlLimit)}\n\`\`\`\n\n`;
 
   if (designAnalysisSummary) {
     msg += `## 原网页设计分析报告（Design Analysis Report）\n${designAnalysisSummary}\n\n`;
@@ -115,5 +141,9 @@ export function buildOptimizationPlanUserMessage(
   round: number,
 ): string {
   return `当前视觉评分结果（第 ${round} 轮）：\n${visualScoreJson}\n\n` +
-    `请分析评分中暴露的视觉问题，生成 OptimizationPlan JSON（issues 数组，每项含 problem 与 solution）。`;
+    `请分析评分中暴露的视觉问题，严格按系统提示规定的 JSON schema 输出优化方案：` +
+    `diagnosis（rootCause / affectedAreas / designDNAAtRisk）、` +
+    `optimizationPlan[]（priority / category / targetComponent / problem / reason / before / after / expectedImpact）、` +
+    `codeInstructions[]（file / action / changes）、estimatedScoreIncrease、optimizationDecision、` +
+    `optimizationMemory.round=${round}、confidence。不要输出任何解释文字。`;
 }

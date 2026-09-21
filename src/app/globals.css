@@ -138,7 +138,6 @@
   --agent-deploy: #0a84ff;
 
   --transition-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  --transition-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* ===================================================================
@@ -538,23 +537,10 @@
 .agent-indicator__dot--running.agent-deploy::before { background: var(--agent-deploy); }
 
 /* ===================================================================
-   Progress Bar Animations
+   Progress Bar — shimmer keyframe only. The ProgressBar component animates
+   its fill via framer-motion `scaleX` (transform-only); the shimmer loop
+   is the only progress keyframe still referenced from JSX.
    =================================================================== */
-
-@keyframes progress-fill {
-  from {
-    width: 0%;
-  }
-}
-
-@keyframes progress-glow {
-  0%, 100% {
-    box-shadow: 0 0 8px rgba(0, 113, 227, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 16px rgba(0, 113, 227, 0.5);
-  }
-}
 
 @keyframes progress-shimmer {
   0% {
@@ -563,42 +549,6 @@
   100% {
     transform: translateX(200%);
   }
-}
-
-.progress-bar {
-  position: relative;
-  height: 4px;
-  border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-}
-
-.progress-bar__fill {
-  height: 100%;
-  border-radius: 9999px;
-  transition: width 0.6s var(--transition-smooth);
-  animation: progress-fill 0.8s var(--transition-smooth);
-}
-
-.progress-bar__fill--complete {
-  animation:
-    progress-fill 0.8s var(--transition-smooth),
-    progress-glow 2s ease-in-out infinite;
-}
-
-.progress-bar__shimmer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 50%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.4) 50%,
-    transparent 100%
-  );
-  animation: progress-shimmer 2s ease-in-out infinite;
 }
 
 /* ===================================================================
@@ -1193,4 +1143,98 @@ section {
 /* Disable mouse glow during scroll */
 .is-scrolling .hero-mouse-glow {
   opacity: 0 !important;
+}
+
+/* ===== Pipeline step card hover — plain CSS =====
+   (Tailwind v4 transform utilities rely on @property-registered vars that are
+   unreliable in this dev env; plain translate/rotate/scale props always work) */
+.pipeline-card {
+  transition: translate 0.3s ease-out;
+}
+.pipeline-card:hover {
+  translate: 0 -6px;
+}
+.pipeline-card .step-hairline {
+  scale: 0 1;
+  transform-origin: left center;
+  transition: scale 0.5s ease-out;
+}
+.pipeline-card:hover .step-hairline {
+  scale: 1 1;
+}
+.pipeline-card .step-icon {
+  transition: rotate 0.3s ease-out, scale 0.3s ease-out;
+}
+.pipeline-card:hover .step-icon {
+  rotate: -6deg;
+  scale: 1.05;
+}
+.pipeline-card .step-badge {
+  transform-origin: top right;
+  transition: scale 0.3s ease-out;
+}
+.pipeline-card:hover .step-badge {
+  scale: 1.1;
+}
+.pipeline-card .step-arrow {
+  transition: translate 0.3s ease-out;
+}
+.pipeline-card:hover .step-arrow {
+  translate: 4px 0;
+}
+
+/* ===== Core feature card hover — plain CSS =====
+   (Tailwind v4 transform utilities unreliable in this dev env; matches pipeline-card pattern) */
+.feature-card {
+  transition: translate 0.3s ease-out;
+}
+.feature-card:hover {
+  translate: 0 -8px;
+}
+.feature-card .feature-icon {
+  transition: rotate 0.3s ease-out;
+}
+.feature-card:hover .feature-icon {
+  rotate: -8deg;
+}
+
+/* ===== CTA banner shine sweep — plain CSS =====
+   (Tailwind v4 transform utilities unreliable in this dev env; matches pipeline/feature pattern) */
+.cta-shine {
+  translate: -130% 0;
+  transition: translate 1.1s ease;
+  will-change: translate;
+}
+.cta-banner:hover .cta-shine {
+  translate: 130% 0;
+}
+
+/* ===== Keyboard focus visibility (WCAG 2.1 AA — Operable) =====
+   Mouse clicks do not show rings (:focus-visible only matches keyboard nav). */
+:focus-visible {
+  outline: 2px solid #6B5CE7;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ===== Browser surfaces themed from the palette =====
+   Caret + selection carry the design too (cheapest signal a page was built, not assembled). */
+input,
+textarea {
+  caret-color: #6B5CE7;
+}
+::selection {
+  background: rgba(107, 92, 231, 0.22);
+  color: #1d1d1f;
+}
+
+/* ===== hide-scrollbar (unlayered) =====
+   Must live OUTSIDE @layer utilities: the unlayered global `* { scrollbar-width: thin }`
+   beats ANY layered rule regardless of specificity (native cascade layers), which made
+   the layered .hide-scrollbar a no-op (visible scrollbars in workspace sidebars/tab bar). */
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }

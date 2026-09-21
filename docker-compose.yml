@@ -1,0 +1,77 @@
+# ============================================================================
+# Code Designer AI — 本地 Docker 栈（app + postgres + redis）
+#
+# 端口约定（全部避开宿主机已占用的端口）：
+#   app      -> http://localhost:3100   (3000 已被 chatgpt2api 占用)
+#   postgres -> localhost:5433          (5432 留给本地 PGlite)
+#   redis    -> localhost:6380
+#
+# 环境变量：来自 .env（env_file），下面 environment 中的项会覆盖它，
+# 以便容器内使用服务名 db/redis 互通，且不写生产 Supabase 库。
+# ============================================================================
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: cda-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: code_designer_ai
+    ports:
+      - "5433:5432"
+    volumes:
+      - cda-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d code_designer_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: cda-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - cda-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # 构建期 Prisma 需要一个占位 DATABASE_URL（不用于真实连接）
+        DATABASE_URL: "postgresql://postgres:postgres@db:5432/code_designer_ai?schema=public"
+        NPM_REGISTRY: "https://registry.npmmirror.com"
+    container_name: cda-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/code_designer_ai?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      AUTH_URL: "http://localhost:3100"
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: "production"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "3100:3000"
+
+volumes:
+  cda-pgdata:
+  cda-redisdata:

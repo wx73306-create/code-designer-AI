@@ -5,10 +5,18 @@
 export const maxDuration = 300; // 5 minutes — preview step generates full HTML pages
 
 import { NextRequest, NextResponse } from 'next/server';
-import { callMiMo, type ModelConfig } from '@/lib/mimo';
+import { callMiMo, callMiMoStream, type ModelConfig } from '@/lib/mimo';
 import { scrapeWebsite } from '@/lib/website-scraper';
+import { buildWebsitePackage, formatPackageContext } from '@/lib/website-package';
+import {
+  getInteractionPackage,
+  getLayoutProbe,
+  isInteractionCaptureEnabled,
+  isLayoutProbeEnabled,
+} from '@/lib/browser-intelligence';
+import type { InteractionPackage, LayoutProbeResult } from '@/lib/browser-intelligence';
+import { ANIMATION_SYSTEM_PROMPT, buildAnimationUserMessage } from '@/lib/animation';
 import { matchDesignPatterns, formatKnowledgeContext } from '@/lib/design-knowledge';
-import { formatDesignRules, formatScoreModel } from '@/lib/design-rules';
 import { buildVisualEvaluationUserMessage, buildOptimizationPlanUserMessage } from '@/lib/visual-evaluation';
 import { buildPremiumIdentityPrompt, formatPremiumRulesContext } from '@/lib/code-rules';
 import { buildModeControlPrompt, formatEnhancementPlanContext, buildEnhancementUserMessage, buildEnhancementSystemPrompt } from '@/lib/design-mode';
@@ -17,9 +25,77 @@ import { getRequestAuth } from '@/lib/admin-session';
 import { consumeQuotaByEmail } from '@/lib/quota';
 import { checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
 
+// ---- Website Package cache -------------------------------------------
+// 采集一次，多个步骤共享。原先 scrapedData 是 vision 步骤的局部变量，
+// 导致 planning / code 拿不到真实色值，只能靠 Vision 的文字描述去猜。
+// WebsitePackage 作为唯一数据源后，这里做短期缓存避免重复抓取同一 URL。
+
+type ScrapedResult = Awaited<ReturnType<typeof scrapeWebsite>>;
+
+const scrapeCache = new Map<string, { data: ScrapedResult; ts: number }>();
+const SCRAPE_CACHE_TTL_MS = 10 * 60 * 1000;
+const SCRAPE_CACHE_MAX = 50;
+
+async function getScraped(url: string): Promise<ScrapedResult | null> {
+  const cached = scrapeCache.get(url);
+  if (cached && Date.now() - cached.ts < SCRAPE_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  try {
+    const data = await scrapeWebsite(url);
+    scrapeCache.set(url, { data, ts: Date.now() });
+    if (scrapeCache.size > SCRAPE_CACHE_MAX) {
+      const oldest = scrapeCache.keys().next().value;
+      if (oldest) scrapeCache.delete(oldest);
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 交互采集（带缓存）。
+ *
+ * `planning` / `code` / `animation` 三个 step 都会调它，缓存保证**同一 URL
+ * 只采一次浏览器** —— 不缓存的话一次生成要开三次（实测各 20-32s，共约 90s），
+ * 而本路由 `maxDuration` 只有 300s。
+ *
+ * `INTERACTION_CAPTURE` 未开启时直接返回 `null`，零开销，链路行为与开启前一致。
+ */
+async function getInteraction(url: string): Promise<InteractionPackage | null> {
+  if (!isInteractionCaptureEnabled()) return null;
+  try {
+    return await getInteractionPackage(url);
+  } catch {
+    // 采集层已保证不抛错，这里是最后一道保险
+    return null;
+  }
+}
+
+/**
+ * 布局实测（带缓存）。
+ *
+ * 与 `getInteraction()` 同理：三个 step 都会调它，缓存保证**同一 URL 只开一次浏览器**
+ * （实测首次约 2s，命中缓存约 1ms）。
+ *
+ * `LAYOUT_PROBE` 未开启时直接返回 `null` —— 此时 `layout.flow` 为空数组，
+ * 语义是 **unknown（没测过）**，而不是旧的硬编码猜测值。
+ */
+async function getLayout(url: string): Promise<LayoutProbeResult | null> {
+  if (!isLayoutProbeEnabled()) return null;
+  try {
+    return await getLayoutProbe(url);
+  } catch {
+    // 采集层已保证不抛错，这里是最后一道保险
+    return null;
+  }
+}
+
 // ---- Prompt Templates for each workflow step -------------------------
 
 const SYSTEM_PROMPTS: Record<string, string> = {
+  animation: ANIMATION_SYSTEM_PROMPT,
   vision: `# Role
 
 你是一名世界级 Web Design Intelligence Analyst。
@@ -205,179 +281,6 @@ CHECK 4: 输出是否可以直接指导 React 组件生成？
     "componentsMeaningful": true,
     "visualReasonsExplained": true,
     "readyForCodeGen": true
-  }
-}`,
-
-  critic: `# Role
-
-你是一名世界级 Web Design Director（网页设计总监）。
-
-你同时具备：
-- Senior Design Director（20年+ UI/UX 设计经验）
-- UX Strategist（用户体验策略师）
-- Brand Consultant（品牌设计顾问）
-- AI Design Evaluator（AI 设计评估引擎）
-
-你曾参与设计类似 Apple、Stripe、Linear、Tesla、Vercel 级别的商业网站项目。
-
-你的职责不是评价网页好坏。
-你的职责是：**理解网页设计 DNA，并制定下一阶段设计决策。**
-
-你的输出将被 Enhancement Agent、Planning Agent、Code Agent 直接消费。
-
-
-# Multi-Stage Thinking Process
-
-你必须按以下 4 个阶段思考：
-
-## Stage 1: Understand（理解）
-理解网页设计目的：
-- 这个网站是什么？给谁使用？
-- 品牌等级是什么？（Basic / Professional / Premium / World-class）
-- 设计目标是什么？（品牌展示 / 转化 / 教育 / 社区）
-
-## Stage 2: Evaluate（评估）
-判断设计质量，采用 7 维评分模型（每维 0-100 分）：
-
-| 维度 | 权重 | 评分标准 |
-|------|------|----------|
-| layout | 15% | 布局平衡、留白、信息密度、Hero 占比 |
-| typography | 15% | 标题比例、字重层级、行距、可读性 |
-| color | 10% | 主色一致性、对比度、品牌匹配 |
-| image | 15% | 图片质量、主视觉冲击力、资产多样性 |
-| ux | 15% | 用户浏览路径、信息架构、转化逻辑、内容节奏 |
-| brand | 10% | 品牌识别度、品牌情感、一致性 |
-| premium | 20% | ⭐最重要：是否达到 Apple/Linear/Stripe/Tesla 水准 |
-
-参考标准：对比 Apple、Linear、Stripe、Tesla、Vercel 的设计水准。
-
-## Stage 3: Decide（决策）
-对每个主要设计元素做出判断，必须遵循 Decision Framework：
-
-**KEEP（保留）**— 如果满足以下任一条件：
-- 具有品牌识别度（用户看到这个元素能联想到品牌）
-- 提升用户体验（引导用户行为、降低认知负担）
-- 视觉价值高（高质量摄影、精致动画、独特布局）
-
-**REMOVE（删除）**— 如果满足以下任一条件：
-- 模板化（看起来像 Bootstrap/Tailwind 默认模板）
-- 降低高级感（廉价渐变、过多阴影、无意义图标）
-- 信息噪音（重复卡片、冗余文字、无价值装饰）
-
-**IMPROVE（优化）**— 如果满足以下条件：
-- 方向正确但执行不足（间距不够、字体比例不对、动画缺失）
-- 需要具体 before → after 的优化方案
-
-**STYLE（风格方向）**— 定义未来视觉方向：
-- direction（设计方向）和 tone（调性）
-- 用于指导 Code Agent 的视觉生成
-
-## Stage 4: Guide（指导）
-输出 nextAgentInstruction：一段简洁的指令，直接告诉 Code Agent 应该怎么做。
-
-
-# UX Flow Analysis
-
-除了视觉分析，你还必须分析用户体验流：
-
-Visual Psychology Framework:
-Attention（注意力）→ Emotion（情感）→ Understanding（理解）→ Trust（信任）→ Conversion（转化）
-
-回答：
-1. 用户第一眼看到什么？为什么这个元素吸引注意？
-2. 哪些设计建立品牌信任？
-3. 哪些地方造成认知负担？
-4. 转化路径是否清晰？
-
-
-# QA Feedback Loop
-
-如果存在 qaFeedback（来自 QA Agent 的反馈），必须：
-1. 找出上一版本失败原因
-2. 将问题分类为：layout_issue / visual_issue / spacing_issue / color_issue / typography_issue / interaction_issue
-3. 输出下一轮设计修正策略
-4. 在 designDecision.improve 中针对每个 QA 问题给出具体修复方案
-
-
-# Self Check Before Output
-
-在输出 JSON 前必须执行 4 项检查：
-
-CHECK 1: 是否识别了品牌 DNA？
-CHECK 2: 是否分析了用户体验流？
-CHECK 3: 是否提供了具体的优化方向（before → after）？
-CHECK 4: nextAgentInstruction 是否可以直接指导 Code Agent？
-
-如果任何 CHECK 不通过，修正后再输出。
-
-
-# Output
-
-严格以 JSON 格式返回，不要添加任何解释文字。
-
-返回的 JSON 结构如下：
-{
-  "brandPosition": {
-    "type": "premium technology",
-    "targetUser": "creative professionals",
-    "brandLevel": "World-class",
-    "designGoal": "create premium emotional experience",
-    "confidence": 0.90,
-    "evidence": ["minimal layout", "product photography", "large typography"]
-  },
-  "uxAnalysis": {
-    "attentionFlow": "Hero product image → headline → CTA → feature sections",
-    "emotionalTrigger": "product desire through cinematic photography",
-    "conversionPath": "hero CTA → product page → purchase",
-    "cognitiveLoad": "low — clean hierarchy, minimal distractions",
-    "userFeeling": ["trust", "innovation", "desire"],
-    "confidence": 0.85
-  },
-  "visualHierarchy": [
-    { "element": "hero product image", "weight": 100, "reason": "largest visual, emotional anchor" },
-    { "element": "headline", "weight": 90, "reason": "largest typography, center position" },
-    { "element": "primary CTA", "weight": 80, "reason": "high contrast, action color" },
-    { "element": "feature sections", "weight": 50, "reason": "supporting content" },
-    { "element": "footer", "weight": 20, "reason": "utility links" }
-  ],
-  "score": {
-    "layout": 85,
-    "typography": 88,
-    "color": 90,
-    "image": 92,
-    "ux": 80,
-    "brand": 88,
-    "premium": 78
-  },
-  "totalScore": 86,
-  "designLevel": "Premium",
-  "designDecision": {
-    "keep": [
-      { "element": "hero product photography", "reason": "core brand identity, emotional anchor" },
-      { "element": "minimal navigation", "reason": "reduces cognitive load, premium feel" },
-      { "element": "large centered typography", "reason": "strong visual hierarchy" }
-    ],
-    "remove": [
-      { "element": "excess feature cards", "reason": "template feel, information noise", "rule": "RULE-001" },
-      { "element": "unnecessary shadows", "reason": "reduces premium feel", "rule": "RULE-003" }
-    ],
-    "improve": [
-      { "element": "spacing", "before": "dense sections", "after": "generous whitespace (80-120px section padding)", "reason": "premium feel requires breathing room" },
-      { "element": "animations", "before": "static", "after": "scroll-triggered fade-in-up", "reason": "adds life without distraction" },
-      { "element": "hero size", "before": "60vh", "after": "80vh", "reason": "RULE-002: hero should dominate first screen" }
-    ],
-    "style": {
-      "direction": "premium minimal product storytelling",
-      "tone": "sophisticated, emotional, confident",
-      "reference": "Apple + Linear"
-    }
-  },
-  "nextAgentInstruction": "Generate a premium minimal website with: full-viewport hero (80vh) featuring cinematic product photography, large centered headline (48-64px), single primary CTA, max 3 feature sections with storytelling layout (not card grid), generous section spacing (80-120px), scroll-triggered animations. Remove all card grids and replace with narrative sections.",
-  "selfCheck": {
-    "brandDNAIdentified": true,
-    "uxAnalyzed": true,
-    "improvementsSpecific": true,
-    "readyForCodeAgent": true
   }
 }`,
 
@@ -891,7 +794,9 @@ Premium Design Standard（商业级设计标准）
 生成下一轮修改指令，直接反馈给 Code Agent。
 
 
-# Optimization Rule（自动优化闭环规则）
+# Optimization Rule（优化决策规则）
+
+本方案由用户在 QA 面板手动触发并手动决定是否应用，你只负责出方案，不负责驱动重跑。
 
 评分判断：
 - **90-100**: 达到商业级 → return "complete"
@@ -1020,7 +925,7 @@ optimizationDecision 只能是: complete / fix / optimize`,
 你的任务不是重新设计网页。
 你的任务是：**在保持 Design DNA 的情况下，进行精准优化。**
 
-你的职责是：检测 → 诊断 → 生成方案 → 驱动修复，形成自动优化闭环。
+你的职责是：检测 → 诊断 → 生成方案。是否应用方案由用户手动决定。
 
 
 # Optimization Pipeline（5 阶段优化流程）
@@ -1568,13 +1473,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     rawBody = body;
-    const { step, url, context, modelConfig, generationId, screenshotBase64 } = body as {
+    const { step, url, context, modelConfig, generationId, screenshotBase64, cloneScreenshotBase64 } = body as {
       step: string;
       url: string;
       context?: Record<string, unknown>;
       modelConfig?: ModelConfig;
       generationId?: string;
       screenshotBase64?: string;
+      /** Sprint B：qa step 的第二张图（生成页截图）。 */
+      cloneScreenshotBase64?: string;
     };
 
     if (!step || !url) {
@@ -1607,7 +1514,7 @@ export async function POST(request: NextRequest) {
     let systemPrompt = SYSTEM_PROMPTS[step];
     if (!systemPrompt) {
       return NextResponse.json(
-        { error: `Unknown step: ${step}. Valid steps: vision, critic, planning, code, qa, optimize, enhance, preview` },
+        { error: `Unknown step: ${step}. Valid steps: vision, planning, code, qa, optimize, enhance, preview` },
         { status: 400 }
       );
     }
@@ -1650,8 +1557,8 @@ export async function POST(request: NextRequest) {
     if (step === 'vision') {
       // Fetch the real website and extract CSS/HTML data
       try {
-        scrapedData = await scrapeWebsite(url);
-        console.log(`[Vision] Scraped ${url}: ${scrapedData.colors.length} colors, ${scrapedData.fonts.length} fonts, ${scrapedData.externalCSSCount} external stylesheets`);
+        scrapedData = await getScraped(url);
+        console.log(`[Vision] Scraped ${url}: ${scrapedData?.colors.length ?? 0} colors, ${scrapedData?.fonts.length ?? 0} fonts, ${scrapedData?.externalCSSCount ?? 0} external stylesheets`);
       } catch (scrapeErr) {
         console.warn(`[Vision] Failed to scrape ${url}:`, scrapeErr instanceof Error ? scrapeErr.message : scrapeErr);
       }
@@ -1735,27 +1642,31 @@ export async function POST(request: NextRequest) {
         userMessage += `\n请分析这个网站的设计系统，提取颜色、字体、间距、阴影、动画等设计 Token。`;
         userMessage += `\n注意：无法获取该网站的 CSS 数据，请根据网站类型和 URL 推断可能的设计系统。`;
       }
-    } else if (step === 'critic') {
-      // Inject design rules library + scoring model into system prompt
-      systemPrompt += `\n\n${formatDesignRules()}\n\n${formatScoreModel()}`;
-      userMessage += `\n请基于以上视觉分析结果进行设计评审，生成 DesignDecision JSON。`;
-      // QA 反馈闭环：优化轮次时携带 QA 问题列表
-      if (context?.qaFeedback) {
-        userMessage += `\n\n## 🔄 QA 反馈闭环（第 ${context.round || 2} 轮优化）\n`;
-        userMessage += `QA Agent 对上一轮生成代码的评估结果：\n${JSON.stringify(context.qaFeedback, null, 2)}\n`;
-        userMessage += `\n请根据 QA 反馈重新评审设计决策，针对暴露的问题调整 keep/remove/improve 列表，确保下一轮代码生成能修复这些问题。在返回的 JSON 中设置 "round": ${context.round || 2}。`;
-      }
     } else if (step === 'planning') {
+      // Website Intelligence Package — 真实设计 Token 的唯一来源
+      // interaction 用 states 粒度：规划只需要知道「哪些组件有多状态」
+      const planningPkgText = formatPackageContext(
+        buildWebsitePackage({
+          scraped: await getScraped(url),
+          interaction: (await getInteraction(url)) ?? undefined,
+          layout: (await getLayout(url)) ?? undefined,
+        }),
+        { interactionLevel: 'states' },
+      );
+      if (planningPkgText) userMessage += `\n\n${planningPkgText}`;
       userMessage += `\n请根据以上设计分析结果，规划 React 项目的组件树和文件结构。`;
-      if (context?.designDecision) {
-        userMessage += `\n\n## ⭐ Design Critic 设计决策约束\n`;
-        userMessage += `Design Critic Agent 已做出设计决策（见上下文 designDecision 字段）。你的组件规划必须服从该决策：\n`;
-        userMessage += `- remove 列表中的元素不得出现在组件树中\n`;
-        userMessage += `- keep 列表中的元素必须有对应组件\n`;
-        userMessage += `- improve 列表中的元素需要针对性的组件设计（如更好的间距、层级）\n`;
-        userMessage += `- style.direction 和 style.tone 决定整体架构风格`;
-      }
     } else if (step === 'code') {
+      // Website Intelligence Package — 精确还原的色值/间距/圆角依据
+      // interaction 用 event 粒度：写代码需要「点谁 → 发生什么」，不需要截图
+      const codePkgText = formatPackageContext(
+        buildWebsitePackage({
+          scraped: await getScraped(url),
+          interaction: (await getInteraction(url)) ?? undefined,
+          layout: (await getLayout(url)) ?? undefined,
+        }),
+        { interactionLevel: 'event' },
+      );
+      if (codePkgText) userMessage += `\n\n${codePkgText}`;
       userMessage += `\n请根据以上组件树和设计系统，生成完整的 React + TypeScript + Tailwind CSS 代码。`;
       // 核心身份升级：从复制工具到设计工程师
       userMessage += `\n\n## 🎯 你的角色\n`;
@@ -1776,26 +1687,34 @@ export async function POST(request: NextRequest) {
       if (context?.enhancementPlan) {
         userMessage += `\n\n${formatEnhancementPlanContext(context.enhancementPlan as never)}`;
       }
-      // Design Critic 约束注入
-      if (context?.designDecision) {
-        userMessage += `\n\n## ⭐ Design Critic 设计决策（必须遵守）\n`;
-        userMessage += `请严格遵循上下文中 designDecision 的 keep/remove/improve/style 决策。\n`;
-        userMessage += `- remove 列表中的元素不得出现\n`;
-        userMessage += `- keep 列表中的元素必须保留\n`;
-        userMessage += `- improve 列表中的元素需要针对性优化\n`;
-      }
       // Handle auto-optimization context
       if (context?.optimizationIssues) {
         userMessage += `\n\n## ⚡ 自动优化模式\n${context.optimizationIssues as string}\n请确保本轮生成的代码已修复以上所有问题。`;
       }
+    } else if (step === 'animation') {
+      // Phase 6 — GSAP 动效恢复：基于检测到的 AnimationData 复刻原站动态体验
+      // interaction 用 full 粒度：动效恢复需要完整的「什么触发 → 变成什么样」
+      const animationPkg = buildWebsitePackage({
+        scraped: await getScraped(url),
+        interaction: (await getInteraction(url)) ?? undefined,
+        layout: (await getLayout(url)) ?? undefined,
+      });
+      userMessage += `\n\n${buildAnimationUserMessage({
+        pkg: animationPkg,
+        structure: (context?.componentTree as string) || (context?.structure as string) || undefined,
+        mode: (context?.mode as 'clone' | 'enhancement') || 'clone',
+      })}`;
     } else if (step === 'qa') {
       // Visual Evaluation Agent — 评价视觉效果而非代码
+      // Sprint B：输入从「HTML 源码」升级为「两张截图 + 还原度 Diff 报告」，
+      // HTML 降级为辅助参考（见 buildVisualEvaluationUserMessage）。
       const previewHtml = (context?.previewHtml as string) || '';
       const designAnalysisSummary = (context?.designAnalysisSummary as string) || '';
       const designSystemSummary = (context?.designSystemSummary as string) || '';
       const round = typeof context?.round === 'number' ? (context.round as number) : undefined;
+      const diffReportJson = (context?.diffReportJson as string) || '';
 
-      userMessage = buildVisualEvaluationUserMessage(previewHtml, designAnalysisSummary, designSystemSummary, round);
+      userMessage = buildVisualEvaluationUserMessage(previewHtml, designAnalysisSummary, designSystemSummary, round, diffReportJson);
     } else if (step === 'optimize') {
       // Optimization Agent — 根据视觉评分生成优化方案
       const visualScoreJson = (context?.visualScoreJson as string) || '{}';
@@ -1928,24 +1847,47 @@ export async function POST(request: NextRequest) {
       userMessage += `- 使用语义化 HTML5（nav, main, section, article, footer）\n`;
       userMessage += `- 每个区块都是一个独立的 <section>\n\n`;
 
+      // Phase 6 — 把 Animation Agent 产出的 GSAP 原样内联进最终 HTML
+      if (context?.animationScript) {
+        userMessage += `\n\n## GSAP 动效（由 Animation Agent 生成，必须原样内联）\n\n`;
+        userMessage += `在 </body> 之前依次引入以下两个 CDN，然后把脚本原样放进一个 <script> 标签：\n\n`;
+        userMessage += `<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"><\/script>\n`;
+        userMessage += `<script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/ScrollTrigger.min.js"><\/script>\n\n`;
+        userMessage += "```javascript\n" + (context.animationScript as string) + "\n```\n\n";
+        userMessage += `规则：\n`;
+        userMessage += `- 脚本原样内联，不要改写逻辑、不要增删动画\n`;
+        userMessage += `- 若脚本引用了页面上不存在的 selector，跳过那条动画而不是报错\n`;
+        userMessage += `- 已有 CSS 过渡的地方不要重复叠加 GSAP\n`;
+      }
+
       userMessage += `---\n\n`;
       userMessage += `**现在请生成完整的 HTML。只输出 HTML 代码，不要任何解释、markdown 标记或代码围栏。**`;
     }
 
     // --- Inject design knowledge + style context BEFORE calling the model ---
-    if ((step === 'critic' || step === 'planning' || step === 'code') && context?.designKnowledge) {
+    if ((step === 'planning' || step === 'code') && context?.designKnowledge) {
       systemPrompt += `\n\n${context.designKnowledge as string}`;
     }
-    if ((step === 'critic' || step === 'planning' || step === 'code') && context?.styleContext) {
+    if ((step === 'planning' || step === 'code') && context?.styleContext) {
       systemPrompt += `\n\n${context.styleContext as string}`;
     }
 
     // ---- Screenshot-based visual reference (multimodal) ----
     // When a website screenshot is available, inject it for Vision and Code steps
     const images: string[] = [];
-    const useScreenshot = screenshotBase64 && (step === 'vision' || step === 'code' || step === 'preview' || step === 'critic');
+    const useScreenshot = screenshotBase64 && (step === 'vision' || step === 'code' || step === 'preview');
     if (useScreenshot) {
       images.push(screenshotBase64);
+    }
+    // Sprint B：qa 注入两张图 —— 原站 + 生成页。
+    // 这是三处断裂之一（qa 曾被排除在截图注入之外，「视觉评分 Agent」从未看过任何图）。
+    if (step === 'qa' && screenshotBase64) {
+      images.push(screenshotBase64);
+    }
+    if (step === 'qa' && cloneScreenshotBase64) {
+      images.push(cloneScreenshotBase64);
+    }
+    if (useScreenshot) {
 
       if (step === 'vision') {
         userMessage = `## 重要：以下是目标网站的实际截图，请仔细分析其视觉设计\n\n` + userMessage;
@@ -1986,108 +1928,184 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Determine max tokens based on step
-    const maxTokens = step === 'preview' ? 32768 : step === 'code' ? 16384 : step === 'vision' ? 6144 : 4096;
-    const baseTemp = step === 'code' ? 0.2 : step === 'vision' ? 0.15 : step === 'critic' ? 0.2 : step === 'preview' ? 0.2 : 0.3;
+    // Determine max tokens based on step.
+    // 注意：mimo-v2.5 与 mimo-v2.5-pro 均为推理模型，会在 reasoning_content 中产出长链思考，
+    // 因此 max_tokens 实际约束「推理+答案」总 token 数，直接决定单阶段最长墙钟时间。
+    // 原值过大（code=16384 / preview=32768），在 MiMo provider ~1-2 tok/s 吞吐下会撑到 10min+。
+    // 这里下调以约束单阶段耗时（仍保留足够余量，避免正常输出被截断）。
+    const maxTokens = step === 'preview' ? 12288 : step === 'code' ? 8192 : step === 'vision' ? 4096 : 2048;
+    const baseTemp = step === 'code' ? 0.2 : step === 'vision' ? 0.15 : step === 'preview' ? 0.2 : 0.3;
     // Clone mode = lower temp (deterministic), Enhancement = higher temp (creative)
     const temperature = step === 'preview' && (context?.mode as string) === 'clone' ? 0.1 : baseTemp;
 
     const callStartedAt = Date.now();
 
-    const result = await callMiMo(systemPrompt, userMessage, {
-      temperature,
-      maxTokens,
-      modelConfig,
-      images: images.length > 0 ? images : undefined,
-    });
+    // ---- SSE streaming path ----
+    // 服务端以 text/event-stream 逐 token 推流。客户端（use-workflow.callMimoAPI）
+    // 实时把 delta 写入 agent.streamingText，让 code(>3min) 等长时间阶段也能即时吐字。
+    const encoder = new TextEncoder();
+    const sse = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
 
-    // ---- 实时埋点：记录本次 AI API 调用 ----
-    liveStats.trackApiCall({
-      generationId,
-      step,
-      model: effectiveModel,
-      targetUrl: url,
-      status: 'success',
-      httpStatus: 200,
-      durationMs: Date.now() - callStartedAt,
-      promptChars: systemPrompt.length + userMessage.length,
-      completionChars: result.length,
-    });
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          const aiStream = await callMiMoStream(systemPrompt, userMessage, {
+            temperature,
+            maxTokens,
+            modelConfig,
+            images: images.length > 0 ? images : undefined,
+          });
 
-    // Try to parse JSON for structured steps
-    let parsed: unknown = result;
-    if (['vision', 'critic', 'planning', 'qa', 'optimize', 'enhance'].includes(step)) {
-      try {
-        const trimmed = result.trim();
+          const reader = aiStream.getReader();
+          let answerAcc = ''; // 仅累积 content（最终答案）；reasoning 只用于实时展示，不污染最终 JSON 解析
 
-        // Strategy 1: Direct JSON parse
-        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-          parsed = JSON.parse(trimmed);
-        } else {
-          // Strategy 2: Extract from markdown code block
-          const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-          if (codeBlockMatch) {
-            parsed = JSON.parse(codeBlockMatch[1].trim());
-          } else {
-            // Strategy 3: Find first JSON object or array in the text
-            const firstBrace = trimmed.search(/[\{\[]/);
-            if (firstBrace !== -1) {
-              const jsonCandidate = trimmed.slice(firstBrace);
-              // Find matching closing brace
-              let depth = 0;
-              let lastValid = -1;
-              const openChar = jsonCandidate[0];
-              const closeChar = openChar === '{' ? '}' : ']';
-              for (let i = 0; i < jsonCandidate.length; i++) {
-                if (jsonCandidate[i] === openChar) depth++;
-                if (jsonCandidate[i] === closeChar) depth--;
-                if (depth === 0) { lastValid = i + 1; break; }
-              }
-              if (lastValid > 0) {
-                parsed = JSON.parse(jsonCandidate.slice(0, lastValid));
-              } else {
-                parsed = { raw: result };
-              }
-            } else {
-              parsed = { raw: result };
+          // 逐 delta 推送（content=答案, reasoning=推理过程）
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value?.content) {
+              answerAcc += value.content;
+              controller.enqueue(sse({ type: 'delta', text: value.content }));
+            }
+            if (value?.reasoning) {
+              controller.enqueue(sse({ type: 'reasoning', text: value.reasoning }));
             }
           }
+
+          // ---- 实时埋点：记录本次 AI API 调用 ----
+          liveStats.trackApiCall({
+            generationId,
+            step,
+            model: effectiveModel,
+            targetUrl: url,
+            status: 'success',
+            httpStatus: 200,
+            durationMs: Date.now() - callStartedAt,
+            promptChars: systemPrompt.length + userMessage.length,
+            completionChars: answerAcc.length,
+          });
+
+          // Try to parse JSON for structured steps
+          let parsed: unknown = answerAcc;
+          if (['vision', 'planning', 'qa', 'optimize', 'enhance'].includes(step)) {
+            try {
+              const trimmed = answerAcc.trim();
+
+              // Strategy 1: Direct JSON parse
+              if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                parsed = JSON.parse(trimmed);
+              } else {
+                // Strategy 2: Extract from markdown code block
+                const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+                if (codeBlockMatch) {
+                  parsed = JSON.parse(codeBlockMatch[1].trim());
+                } else {
+                  // Strategy 3: Find first JSON object or array in the text
+                  const firstBrace = trimmed.search(/[\{\[]/);
+                  if (firstBrace !== -1) {
+                    const jsonCandidate = trimmed.slice(firstBrace);
+                    // Find matching closing brace
+                    let depth = 0;
+                    let lastValid = -1;
+                    const openChar = jsonCandidate[0];
+                    const closeChar = openChar === '{' ? '}' : ']';
+                    for (let i = 0; i < jsonCandidate.length; i++) {
+                      if (jsonCandidate[i] === openChar) depth++;
+                      if (jsonCandidate[i] === closeChar) depth--;
+                      if (depth === 0) { lastValid = i + 1; break; }
+                    }
+                    if (lastValid > 0) {
+                      parsed = JSON.parse(jsonCandidate.slice(0, lastValid));
+                    } else {
+                      parsed = { raw: answerAcc };
+                    }
+                  } else {
+                    parsed = { raw: answerAcc };
+                  }
+                }
+              }
+            } catch {
+              // If all JSON parsing fails, return raw text
+              parsed = { raw: answerAcc };
+            }
+          }
+
+          // --- Design Knowledge Base matching ---
+          let designKnowledge: string | undefined;
+
+          if (step === 'vision' && typeof parsed === 'object' && parsed !== null) {
+            // Match analysis against knowledge base
+            const analysis = parsed as Record<string, unknown>;
+            const matched = matchDesignPatterns({
+              colors: analysis.colors as Array<{ hex: string; name?: string; usage?: string }> | undefined,
+              typography: analysis.typography as Array<{ family?: string; size?: string }> | undefined,
+              layout: analysis.layout as Record<string, unknown> | undefined,
+              raw: answerAcc,
+            });
+            if (matched.length > 0) {
+              designKnowledge = formatKnowledgeContext(matched);
+              console.log(`[Knowledge] Matched ${matched.length} patterns: ${matched.map(p => p.name).join(', ')}`);
+            }
+          }
+
+          controller.enqueue(
+            sse({
+              type: 'done',
+              payload: {
+                step,
+                result: parsed,
+                raw: answerAcc,
+                scraped:
+                  step === 'vision'
+                    ? {
+                        success: scrapedData !== null,
+                        colors: scrapedData?.colors.length || 0,
+                        fonts: scrapedData?.fonts.length || 0,
+                        externalCSS: scrapedData?.externalCSSCount || 0,
+                      }
+                    : undefined,
+                designKnowledge,
+              },
+            }),
+          );
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Unknown error';
+          console.error('[MiMo Stream Error]', message);
+
+          // ---- 实时埋点：记录失败的 AI API 调用 ----
+          liveStats.trackApiCall({
+            generationId,
+            step,
+            model: effectiveModel,
+            targetUrl: url,
+            status: 'error',
+            httpStatus: 500,
+            durationMs: Date.now() - callStartedAt,
+            promptChars: systemPrompt.length + userMessage.length,
+            completionChars: 0,
+          });
+
+          try {
+            controller.enqueue(sse({ type: 'error', error: message }));
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          } catch {
+            // controller may already be closed
+          }
+          controller.close();
         }
-      } catch {
-        // If all JSON parsing fails, return raw text
-        parsed = { raw: result };
-      }
-    }
+      },
+    });
 
-    // --- Design Knowledge Base matching ---
-    let designKnowledge: string | undefined;
-
-    if (step === 'vision' && typeof parsed === 'object' && parsed !== null) {
-      // Match analysis against knowledge base
-      const analysis = parsed as Record<string, unknown>;
-      const matched = matchDesignPatterns({
-        colors: analysis.colors as Array<{ hex: string; name?: string; usage?: string }> | undefined,
-        typography: analysis.typography as Array<{ family?: string; size?: string }> | undefined,
-        layout: analysis.layout as Record<string, unknown> | undefined,
-        raw: result,
-      });
-      if (matched.length > 0) {
-        designKnowledge = formatKnowledgeContext(matched);
-        console.log(`[Knowledge] Matched ${matched.length} patterns: ${matched.map(p => p.name).join(', ')}`);
-      }
-    }
-
-    return NextResponse.json({
-      step,
-      result: parsed,
-      raw: result,
-      scraped: step === 'vision' ? {
-        success: scrapedData !== null,
-        colors: scrapedData?.colors.length || 0,
-        fonts: scrapedData?.fonts.length || 0,
-        externalCSS: scrapedData?.externalCSSCount || 0,
-      } : undefined,
-      designKnowledge,
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

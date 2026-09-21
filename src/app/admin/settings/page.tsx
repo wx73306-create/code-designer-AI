@@ -35,7 +35,6 @@ export default function SettingsPage() {
   // Quota settings (local for now)
   const [freeQuota, setFreeQuota] = useState(2)
   const [proQuota, setProQuota] = useState(100)
-  const [autoOptimize, setAutoOptimize] = useState(true)
   const [quotaSaved, setQuotaSaved] = useState(false)
   const [quotaUsers, setQuotaUsers] = useState<Array<{
     email: string; name: string; tier: "free" | "pro"; isAdmin: boolean;
@@ -299,7 +298,6 @@ export default function SettingsPage() {
               <button
                 onClick={() => setPipeline([
                   { stage: "vision", provider: "alibaba", model: "qwen-plus", temperature: 0.3, maxTokens: 4096 },
-                  { stage: "critic", provider: "alibaba", model: "qwen-plus", temperature: 0.2, maxTokens: 4096 },
                   { stage: "planning", provider: "alibaba", model: "qwen-plus", temperature: 0.2, maxTokens: 8192 },
                   { stage: "code", provider: "alibaba", model: "qwen-plus", temperature: 0.1, maxTokens: 16384 },
                   { stage: "qa", provider: "alibaba", model: "qwen-plus", temperature: 0.2, maxTokens: 4096 },
@@ -480,18 +478,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between py-3 border-t border-white/[0.04]">
-              <div>
-                <p className="text-sm text-white/60">自动优化循环</p>
-                <p className="text-[11px] text-white/25 mt-0.5">QA 分数低于 90% 时自动重新生成代码</p>
-              </div>
-              <button onClick={() => setAutoOptimize(!autoOptimize)} className="cursor-pointer">
-                {autoOptimize
-                  ? <ToggleRight className="w-8 h-8 text-[#34C759]" />
-                  : <ToggleLeft className="w-8 h-8 text-white/20" />
-                }
-              </button>
-            </div>
           </div>
 
           {/* 实时用户配额用量 */}

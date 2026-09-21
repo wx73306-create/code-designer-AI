@@ -43,6 +43,10 @@ URL → 网页抓取 → 视觉分析 → Design Token 提取 → 组件架构�
 
 ## 🏗️ 系统架构
 
+> 📐 **架构细节见 [`ARCHITECTURE.md`](ARCHITECTURE.md)**（唯一权威来源）。
+> 下面的简图仅作概览；流水线已新增 WebsitePackage 中间层与 Animation Agent。
+
+
 ```
                         ┌──────────────┐
                         │   用户输入    │

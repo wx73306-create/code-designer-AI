@@ -3,6 +3,11 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence, useInView, useMotionValue, useSpring, useTransform } from "framer-motion";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
+
+gsap.registerPlugin(ScrollTrigger, useGSAP);
 import {
   Sparkles, Eye, Wand2, Bug, Rocket, CheckCircle2, RotateCcw, Loader2, Globe, Home, Check, Layout,
   Globe2, Palette, Code2, ShieldCheck, Download, MessageSquare,
@@ -40,15 +45,13 @@ const PIPELINE_STEPS = [
     tags: ["截图分析", "布局检测", "配色提取", "字体识别"] },
   { id: 3, icon: Palette, title: "体系匹配", desc: "基于设计知识库四维评分，匹配最佳设计体系并生成 Design System", color: "#FF6482", duration: "~2s",
     tags: ["7 种风格", "四维评分", "Design Tokens", "设计规则"] },
-  { id: 4, icon: Sparkles, title: "设计评审", desc: "理解原网页背后的设计逻辑，判断哪些保留、优化、重构，输出设计决策与高级感评分", color: "#FFD60A", duration: "~8s",
-    tags: ["品牌定位", "视觉层级", "结构审查", "高级感评分"] },
-  { id: 5, icon: Brain, title: "架构规划", desc: "智能拆分组件树、规划文件结构与数据流方案", color: "#FF9500", duration: "~9s",
+  { id: 4, icon: Brain, title: "架构规划", desc: "智能拆分组件树、规划文件结构与数据流方案", color: "#FF9500", duration: "~9s",
     tags: ["组件拆分", "文件结构", "数据流", "依赖分析"] },
-  { id: 6, icon: Code2, title: "代码生成", desc: "自动生成 React + TypeScript + TailwindCSS 项目代码", color: "#34C759", duration: "~22s",
+  { id: 5, icon: Code2, title: "代码生成", desc: "自动生成 React + TypeScript + TailwindCSS 项目代码", color: "#34C759", duration: "~22s",
     tags: ["React 19", "TypeScript", "TailwindCSS", "组件化"] },
-  { id: 7, icon: ShieldCheck, title: "质量检测", desc: "自动运行代码检查、兼容性测试与性能优化建议", color: "#FF3B30", duration: "~27s",
+  { id: 6, icon: ShieldCheck, title: "质量检测", desc: "自动运行代码检查、兼容性测试与性能优化建议", color: "#FF3B30", duration: "~27s",
     tags: ["代码审查", "兼容性", "性能测试", "可访问性"] },
-  { id: 8, icon: Download, title: "信息导出", desc: "将分析结果与生成代码打包导出，支持多种格式下载", color: "#0A84FF", duration: "~16s",
+  { id: 7, icon: Download, title: "信息导出", desc: "将分析结果与生成代码打包导出，支持多种格式下载", color: "#0A84FF", duration: "~16s",
     tags: ["JSON 导出", "Markdown", "压缩包", "一键部署"] },
 ];
 
@@ -375,19 +378,32 @@ function AnimatedCounter({ value, suffix = "", prefix = "" }: { value: number; s
   return <span ref={ref}>{prefix}{display}{suffix}</span>;
 }
 
-/** Agent step card — vertical glass card matching screenshot */
+/** Agent step card — compact left-aligned glass card with step-color accents.
+ *  Entrance: GSAP scroll choreography (card rise → badge stamp → icon pop → hairline).
+ *  Hover: transform/opacity only (pre-rendered shadow layer, no box-shadow repaint). */
 function PipelineStep({ step, index }: { step: typeof PIPELINE_STEPS[0]; index: number }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-40px" });
+  const ref = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Landing page scrolls inside an inner `h-screen overflow-y-auto` container —
+    // point ScrollTrigger at the real scroller or it will never fire.
+    const scroller = el.closest(".overflow-y-auto");
+    const st = { trigger: el, start: "top 88%", once: true, ...(scroller ? { scroller } : {}) };
+    const d = (index % 4) * 0.07;
+    // clearProps on complete: leftover inline transform/opacity would otherwise
+    // override the plain-CSS :hover rules in globals.css (inline > stylesheet).
+    gsap.from(el, { y: 28, autoAlpha: 0, duration: 0.55, ease: "power2.out", delay: d, clearProps: "transform,opacity,visibility", scrollTrigger: { ...st } });
+    gsap.from(el.querySelector(".step-badge"), { scale: 1.6, autoAlpha: 0, duration: 0.45, ease: "power2.out", delay: d + 0.15, clearProps: "transform,opacity,visibility", scrollTrigger: { ...st } });
+    gsap.from(el.querySelector(".step-icon"), { scale: 0.4, autoAlpha: 0, duration: 0.5, ease: "back.out(1.7)", delay: d + 0.2, clearProps: "transform,opacity,visibility", scrollTrigger: { ...st } });
+    gsap.from(el.querySelector(".step-hairline"), { autoAlpha: 0, duration: 0.5, delay: d + 0.25, clearProps: "opacity,visibility", scrollTrigger: { ...st } });
+  }, { scope: ref, revertOnUpdate: false });
 
   return (
-    <motion.div
+    <div
       ref={ref}
-      initial={{ opacity: 0, y: 24 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
-      transition={{ delay: index * 0.07, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-      whileHover={{ y: -8, boxShadow: "0 20px 40px rgba(0,0,0,0.08)", transition: { duration: 0.3 } }}
-      className="group relative rounded-[20px] p-6 cursor-pointer flex flex-col"
+      className="group pipeline-card relative rounded-[20px] p-6 cursor-pointer flex flex-col"
       style={{
         background: "rgba(255,255,255,0.75)",
         border: "1px solid rgba(255,255,255,0.8)",
@@ -396,47 +412,121 @@ function PipelineStep({ step, index }: { step: typeof PIPELINE_STEPS[0]; index: 
         boxShadow: "0 8px 24px rgba(0,0,0,0.04)",
       }}
     >
-      {/* Number badge — top left */}
+      {/* Pre-rendered hover shadow — opacity swap instead of box-shadow transition (no repaint) */}
       <div
-        className="inline-flex items-center justify-center rounded-xl text-[12px] font-bold text-white mb-5"
-        style={{ width: 45, height: 30, background: `linear-gradient(135deg, ${step.color}, ${step.color}cc)` }}
+        className="pointer-events-none absolute inset-0 rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        style={{ boxShadow: "0 16px 40px rgba(0,0,0,0.08)" }}
+      />
+
+      {/* Top gradient hairline — expands on hover (plain CSS: scale 0→1) */}
+      <div
+        className="step-hairline absolute top-0 left-0 right-0 h-[3px]"
+        style={{ background: `linear-gradient(90deg, ${step.color}, ${step.color}55)` }}
+      />
+
+      {/* Ghost step number — top-right watermark; deepens + grows on hover */}
+      <div
+        className="step-badge absolute top-4 right-5 text-[44px] leading-none font-extrabold select-none pointer-events-none opacity-[0.09] group-hover:opacity-[0.22]"
+        style={{ color: step.color }}
       >
-        {String(step.id).padStart(2, '0')}
+        {String(step.id).padStart(2, "0")}
       </div>
 
-      {/* Circular icon area — center */}
-      <div className="flex justify-center mb-5">
-        <motion.div
-          whileHover={{ rotate: 8, transition: { duration: 0.3 } }}
-          className="rounded-full flex items-center justify-center"
-          style={{ width: 80, height: 80, background: `${step.color}12` }}
-        >
-          <step.icon className="w-10 h-10" style={{ color: step.color }} />
-        </motion.div>
+      {/* Icon — rounded square, left aligned; pops in via GSAP, tilts on card hover */}
+      <div
+        className="step-icon rounded-2xl flex items-center justify-center mb-5"
+        style={{ width: 56, height: 56, background: `${step.color}12`, border: `1px solid ${step.color}1f` }}
+      >
+        <step.icon className="w-7 h-7" style={{ color: step.color }} />
       </div>
 
       {/* Title */}
-      <h3 className="text-[20px] font-bold text-[#1a1a2e] text-center mb-2">{step.title}</h3>
+      <h3 className="text-[17px] font-bold text-[#1a1a2e] mb-2">{step.title}</h3>
 
       {/* Description */}
-      <p className="text-[13px] text-[#64748B] leading-[1.8] text-center mb-5 line-clamp-3 flex-1">{step.desc}</p>
+      <p className="text-[13px] text-[#64748B] leading-[1.75] line-clamp-3 flex-1">{step.desc}</p>
 
-      {/* Bottom: time + arrow */}
-      <div className="flex items-center justify-between mt-auto">
+      {/* Bottom: duration + arrow */}
+      <div className="flex items-center justify-between mt-5 pt-4 border-t border-black/[0.04]">
         <div className="flex items-center gap-1.5 text-[12px] text-[#94A3B8] font-mono">
           <Clock className="w-3.5 h-3.5" />
           <span>{step.duration}</span>
         </div>
-        <motion.div
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          className="w-9 h-9 rounded-full flex items-center justify-center"
-          style={{ background: `${step.color}12` }}
-        >
-          <ChevronRight className="w-4 h-4" style={{ color: step.color }} />
-        </motion.div>
+        <ChevronRight
+          className="step-arrow w-4 h-4 opacity-40 transition-opacity duration-300 group-hover:opacity-100"
+          style={{ color: step.color }}
+        />
       </div>
-    </motion.div>
+    </div>
+  );
+}
+
+/** Core feature card — glass card with color accent.
+ *  Entrance: GSAP scroll choreography (card rise → icon pop).
+ *  Hover: transform/opacity only (pre-rendered shadow layer, no box-shadow repaint). */
+function FeatureCard({ feat, index, onLearnMore }: { feat: typeof CORE_FEATURES[0]; index: number; onLearnMore: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Landing page scrolls inside an inner `h-screen overflow-y-auto` container —
+    // point ScrollTrigger at the real scroller or it will never fire.
+    const scroller = el.closest(".overflow-y-auto");
+    const st = { trigger: el, start: "top 88%", once: true, ...(scroller ? { scroller } : {}) };
+    const d = index * 0.12;
+    gsap.from(el, { y: 28, autoAlpha: 0, duration: 0.55, ease: "power2.out", delay: d, clearProps: "transform,opacity,visibility", scrollTrigger: { ...st } });
+    gsap.from(el.querySelector(".feature-icon"), { scale: 0.4, autoAlpha: 0, duration: 0.5, ease: "back.out(1.7)", delay: d + 0.15, clearProps: "transform,opacity,visibility", scrollTrigger: { ...st } });
+  }, { scope: ref, revertOnUpdate: false });
+
+  return (
+    <div
+      ref={ref}
+      className="feature-card group relative rounded-3xl p-8 cursor-pointer min-h-[280px] flex flex-col"
+      style={{
+        background: "rgba(255,255,255,0.72)",
+        border: "1px solid rgba(255,255,255,0.8)",
+        backdropFilter: "blur(30px)",
+        WebkitBackdropFilter: "blur(30px)",
+        boxShadow: "0 20px 50px rgba(0,0,0,0.06)",
+      }}
+    >
+      {/* Pre-rendered hover shadow — opacity swap instead of box-shadow transition (no repaint) */}
+      <div
+        className="pointer-events-none absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        style={{ boxShadow: "0 24px 60px rgba(0,0,0,0.08)" }}
+      />
+
+      {/* Top: Icon + illustration area */}
+      <div className="flex items-start justify-between mb-6">
+        {/* Circular icon */}
+        <div
+          className="feature-icon rounded-full flex items-center justify-center shrink-0"
+          style={{ width: 70, height: 70, background: `${feat.color}10` }}
+        >
+          <feat.icon className="w-10 h-10" style={{ color: feat.color }} />
+        </div>
+        {/* Illustration placeholder — low opacity */}
+        <div className="w-24 h-16 rounded-lg opacity-[0.12] blur-[1px]"
+          style={{ background: `linear-gradient(135deg, ${feat.color}30, ${feat.color}10)` }} />
+      </div>
+
+      {/* Title */}
+      <h3 className="text-[24px] sm:text-[26px] font-bold text-[#111827] mb-3">{feat.title}</h3>
+
+      {/* Description */}
+      <p className="text-[15px] sm:text-[17px] text-[#64748B] leading-[1.8] flex-1">{feat.desc}</p>
+
+      {/* Learn more link */}
+      <button
+        onClick={onLearnMore}
+        className="mt-5 flex items-center gap-1.5 text-[15px] sm:text-[16px] font-semibold transition-all duration-200 hover:gap-3 cursor-pointer"
+        style={{ color: feat.color }}
+      >
+        <span>了解详情</span>
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>
   );
 }
 
@@ -665,6 +755,21 @@ export default function HomePage() {
   const startTask = useAgentStore((s) => s.startTask);
   const resetTask = useAgentStore((s) => s.resetTask);
   const cancelTask = useAgentStore((s) => s.cancelTask);
+
+  // 生成中实时阶段反馈（顶部运行条展示当前阶段名 + 已用时，避免 code 阶段
+  // 长耗时 (>3min) 时用户误判为卡死）
+  const taskStartedAt = useAgentStore((s) => s.task.startedAt);
+  const currentAgentId = useAgentStore((s) => s.task.currentAgent);
+  const agents = useAgentStore((s) => s.task.agents);
+  const activeAgent = currentAgentId ? agents?.[currentAgentId] : null;
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isRunning) return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [isRunning]);
+  const elapsedSec = taskStartedAt ? Math.max(0, Math.floor((nowTick - taskStartedAt) / 1000)) : 0;
+  const elapsedLabel = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, "0")}`;
 
   const [url, setUrl] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -976,20 +1081,20 @@ export default function HomePage() {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-semibold text-[#1d1d1f] truncate">{userInfo.name}</p>
-                                    <p className="text-[11px] text-black/35 truncate">{userInfo.email}</p>
+                                    <p className="text-[11px] text-black/55 truncate">{userInfo.email}</p>
                                   </div>
                                 </div>
                                 <div className="mt-2.5 flex items-center gap-2">
                                   <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-[#34C759]/10 text-[#34C759] border border-[#34C759]/15">免费版</span>
-                                  <span className="text-[10px] text-black/25">{quota ? `${quota.remaining} / ${quota.limit} 次/天` : '— 次/天'}</span>
+                                  <span className="text-[10px] text-black/45">{quota ? `${quota.remaining} / ${quota.limit} 次/天` : '— 次/天'}</span>
                                 </div>
                               </div>
 
                               {/* 我的项目 */}
                               <div className="px-4 py-2.5 border-b border-black/[0.04]">
                                 <div className="flex items-center justify-between mb-2">
-                                  <p className="text-[10px] font-semibold text-black/30 uppercase tracking-wider">我的项目</p>
-                                  <span className="text-[9px] text-black/20">{projectHistory.length} 个</span>
+                                  <p className="text-[10px] font-semibold text-black/50 uppercase tracking-wider">我的项目</p>
+                                  <span className="text-[9px] text-black/40">{projectHistory.length} 个</span>
                                 </div>
                                 {projectHistory.length > 0 ? (
                                   <div className="space-y-1.5 max-h-32 overflow-y-auto">
@@ -1000,16 +1105,16 @@ export default function HomePage() {
                                         </div>
                                         <div className="min-w-0 flex-1">
                                           <p className="text-[11px] font-medium text-[#1d1d1f] truncate">{proj.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</p>
-                                          <p className="text-[9px] text-black/25">{proj.date}</p>
+                                          <p className="text-[9px] text-black/45">{proj.date}</p>
                                         </div>
-                                        <Download className="w-3 h-3 text-black/20 group-hover:text-[#0071E3] transition-colors shrink-0" />
+                                        <Download className="w-3 h-3 text-black/40 group-hover:text-[#0071E3] transition-colors shrink-0" />
                                       </div>
                                     ))}
                                   </div>
                                 ) : (
                                   <div className="text-center py-3">
-                                    <FolderOpen className="w-5 h-5 text-black/15 mx-auto mb-1.5" />
-                                    <p className="text-[10px] text-black/25">暂无项目，开始生成你的第一个复刻</p>
+                                    <FolderOpen className="w-5 h-5 text-black/30 mx-auto mb-1.5" />
+                                    <p className="text-[10px] text-black/45">暂无项目，开始生成你的第一个复刻</p>
                                   </div>
                                 )}
                               </div>
@@ -1027,13 +1132,13 @@ export default function HomePage() {
                                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-black/[0.03] transition-colors cursor-pointer text-left"
                                   >
                                     <div className="w-7 h-7 rounded-lg bg-black/[0.04] flex items-center justify-center shrink-0">
-                                      <Icon className="w-3.5 h-3.5 text-black/40" />
+                                      <Icon className="w-3.5 h-3.5 text-black/60" />
                                     </div>
                                     <div className="flex-1">
                                       <p className="text-xs font-medium text-[#1d1d1f]">{label}</p>
-                                      <p className="text-[10px] text-black/30">{desc}</p>
+                                      <p className="text-[10px] text-black/50">{desc}</p>
                                     </div>
-                                    <ChevronRight className="w-3 h-3 text-black/15" />
+                                    <ChevronRight className="w-3 h-3 text-black/30" />
                                   </button>
                                 ))}
                               </div>
@@ -1133,25 +1238,25 @@ export default function HomePage() {
 
                     {/* Subtitle */}
                     <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.6 }}
-                      className="mt-5 text-base sm:text-lg text-black/45 max-w-[480px] leading-relaxed">
+                      className="mt-5 text-base sm:text-lg text-black/65 max-w-[480px] leading-relaxed">
                       输入任意网站 URL，AI 自动理解设计、分析语言、拆分组件、生成 React 项目
                     </motion.p>
 
                     {/* URL Input */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.6 }} className="mt-8 w-full max-w-xl relative">
                       <div className="glass-liquid rounded-[32px] overflow-hidden">
-                        <form onSubmit={handleSubmit} className="flex items-center w-full focus-within:shadow-[0_0_30px_rgba(107,92,231,0.1)] transition-all duration-300">
-                          <Globe className="ml-5 mr-3 w-4.5 h-4.5 text-[#86868b] shrink-0" />
+                        <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-y-2 w-full focus-within:shadow-[0_0_30px_rgba(107,92,231,0.1)] transition-all duration-300">
+                          <Globe className="ml-5 mr-3 w-4.5 h-4.5 text-[#6e6e73] shrink-0" />
                           <input ref={inputRef} type="text" value={url} onChange={(e) => setUrl(e.target.value)}
                             placeholder="粘贴任意网站 URL（如：https://www.apple.com）"
-                            className="flex-1 min-w-0 bg-transparent py-4 text-sm text-[#1d1d1f] placeholder:text-[#aeaeb2] outline-none border-none" />
+                            className="flex-1 min-w-[140px] bg-transparent py-4 text-sm text-[#1d1d1f] placeholder:text-[#8e8e93] outline-none border-none" />
                           {/* 模型选择器触发按钮 */}
                           <button type="button" onClick={() => setShowModelMenu((v) => !v)}
                             className="liquid-glass-btn-soft shrink-0 flex items-center gap-1.5 px-2.5 py-2 mr-1.5 rounded-xl text-xs font-medium text-[#1d1d1f] cursor-pointer"
                             title="选择 AI 模型">
                             <span className="text-sm leading-none">{activeProvider?.icon}</span>
                             <span className="hidden sm:inline whitespace-nowrap">{activeProvider?.name.replace(" API", "")}</span>
-                            <ChevronDown className={`w-3.5 h-3.5 text-[#86868b] transition-transform ${showModelMenu ? "rotate-180" : ""}`} />
+                            <ChevronDown className={`w-3.5 h-3.5 text-[#6e6e73] transition-transform ${showModelMenu ? "rotate-180" : ""}`} />
                           </button>
                           <motion.button type="submit" disabled={!url.trim() || !genEnabled || (quota !== null && !quota.allowed)}
                             whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }}
@@ -1170,7 +1275,7 @@ export default function HomePage() {
                             style={{ backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)" }}>
                             <div className="px-4 py-3 border-b border-black/[0.05]">
                               <p className="text-xs font-semibold text-[#1d1d1f]">选择 AI 模型</p>
-                              <p className="text-[10px] text-[#86868b] mt-0.5">选择生成使用的 AI 模型，需在后台配置 API Key 后启用</p>
+                              <p className="text-[10px] text-[#6e6e73] mt-0.5">选择生成使用的 AI 模型，需在后台配置 API Key 后启用</p>
                             </div>
                             <div className="p-1.5 max-h-72 overflow-y-auto">
                               {modelProviders.map((p) => {
@@ -1197,14 +1302,14 @@ export default function HomePage() {
                                           <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-[#0071E3]/10 text-[#0071E3] font-medium shrink-0">默认</span>
                                         )}
                                       </div>
-                                      <span className="text-[10px] text-[#86868b] truncate block mt-0.5">
+                                      <span className="text-[10px] text-[#6e6e73] truncate block mt-0.5">
                                         {isAvailable ? p.models[0] : "模型正在开发中"}
                                       </span>
                                     </div>
                                     {isAvailable ? (
                                       isSelected && <CheckCircle2 className="w-4 h-4 text-[#0071E3] shrink-0" />
                                     ) : (
-                                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black/[0.05] text-[#86868b] font-medium shrink-0">开发中</span>
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-black/[0.05] text-[#6e6e73] font-medium shrink-0">开发中</span>
                                     )}
                                   </button>
                                 );
@@ -1228,7 +1333,7 @@ export default function HomePage() {
                       {genEnabled && isLoggedIn && quota && quota.allowed && (
                         <div className="mt-3 flex items-center gap-2 px-1">
                           <span className={`w-1.5 h-1.5 rounded-full ${quota.remaining > 0 && quota.limit !== -1 ? "bg-[#34C759]" : "bg-[#0071E3]"}`} />
-                          <span className="text-[11px] text-[#86868b]">
+                          <span className="text-[11px] text-[#6e6e73]">
                             {quota.limit === -1
                               ? "无限次生成（管理员）"
                               : `今日剩余 ${quota.remaining} / ${quota.limit} 次生成`}
@@ -1251,7 +1356,7 @@ export default function HomePage() {
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42, duration: 0.6 }} className="mt-4 w-full max-w-xl">
                       <div className="rounded-2xl bg-white/60 border border-black/[0.06] shadow-[0_2px_16px_rgba(0,0,0,0.04)] p-1.5"
                         style={{ backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
                           {([
                             { mode: "clone" as const, icon: FileText, title: "精准复刻", desc: "保持 95% 一致 · 适合学习研究" },
                             { mode: "enhancement" as const, icon: Paintbrush, title: "设计升级", desc: "保留 80% · 优化 20% · 适合商业发布", recommended: true },
@@ -1269,16 +1374,16 @@ export default function HomePage() {
                                   }`}>
                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors
                                   ${isActive ? "bg-[#6B5CE7]/10" : "bg-black/[0.04]"}`}>
-                                  <Icon className={`w-4 h-4 ${isActive ? "text-[#6B5CE7]" : "text-[#86868b]"}`} />
+                                  <Icon className={`w-4 h-4 ${isActive ? "text-[#6B5CE7]" : "text-[#6e6e73]"}`} />
                                 </div>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
-                                    <span className={`text-xs font-semibold ${isActive ? "text-[#1d1d1f]" : "text-[#86868b]"}`}>{title}</span>
+                                    <span className={`text-xs font-semibold ${isActive ? "text-[#1d1d1f]" : "text-[#6e6e73]"}`}>{title}</span>
                                     {recommended && (
                                       <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-[#6B5CE7]/10 text-[#6B5CE7] font-medium">推荐</span>
                                     )}
                                   </div>
-                                  <div className="text-[10px] text-black/35 truncate mt-0.5">{desc}</div>
+                                  <div className="text-[10px] text-black/55 truncate mt-0.5">{desc}</div>
                                 </div>
                               </button>
                             );
@@ -1293,14 +1398,14 @@ export default function HomePage() {
                         style={{ backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}>
                         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-black/[0.04]">
                           <MessageSquare className="w-3.5 h-3.5 text-[#6B5CE7]/60" />
-                          <span className="text-[11px] text-black/35 font-medium">描述你的复刻需求（可选）</span>
+                          <span className="text-[11px] text-black/55 font-medium">描述你的复刻需求（可选）</span>
                         </div>
                         <textarea
                           value={prompt}
                           onChange={(e) => setPrompt(e.target.value)}
                           placeholder={"告诉 AI 你想如何复刻这个网页，例如：\n• 使用黑色背景 + 玻璃拟态风格\n• 保留原始动画效果，增加响应式适配\n• 重点还原 Hero 区域的视差滚动效果"}
                           rows={3}
-                          className="w-full bg-transparent px-4 py-3 text-sm text-[#1d1d1f] placeholder:text-[#aeaeb2]/70 outline-none border-none resize-none leading-relaxed"
+                          className="w-full bg-transparent px-4 py-3 text-sm text-[#1d1d1f] placeholder:text-[#8e8e93]/70 outline-none border-none resize-none leading-relaxed"
                         />
                       </div>
                     </motion.div>
@@ -1308,7 +1413,7 @@ export default function HomePage() {
                     {/* Goal selector tags */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.6 }}
                       className="mt-7 flex flex-col items-start gap-3">
-                      <span className="text-[11px] text-black/30 tracking-wide">选择分析目标</span>
+                      <span className="text-[11px] text-black/50 tracking-wide">选择分析目标</span>
                       <div className="flex flex-wrap items-center gap-2.5">
                         {FEATURE_TAGS.map(({ label, icon: Icon, hint, details, output }, i) => {
                           const isActive = selectedGoal === i;
@@ -1320,9 +1425,9 @@ export default function HomePage() {
                                 className={`group/goal relative inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs transition-all duration-200 cursor-pointer border
                                   ${isActive
                                     ? "bg-[#6B5CE7]/10 border-[#6B5CE7]/30 text-[#6B5CE7] shadow-sm"
-                                    : "bg-white/60 border-black/[0.06] text-[#86868b] hover:text-[#6B5CE7] hover:border-[#6B5CE7]/20"
+                                    : "bg-white/60 border-black/[0.06] text-[#6e6e73] hover:text-[#6B5CE7] hover:border-[#6B5CE7]/20"
                                   }`}>
-                                <Icon className={`w-3 h-3 transition-colors ${isActive ? "text-[#6B5CE7]" : "text-[#86868b] group-hover/goal:text-[#6B5CE7]"}`} />
+                                <Icon className={`w-3 h-3 transition-colors ${isActive ? "text-[#6B5CE7]" : "text-[#6e6e73] group-hover/goal:text-[#6B5CE7]"}`} />
                                 {label}
                                 {isActive && (
                                   <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] px-2 py-0.5 rounded-md bg-black/70 text-white pointer-events-none">
@@ -1331,13 +1436,14 @@ export default function HomePage() {
                                 )}
                               </motion.button>
                               {/* Hover detail panel */}
-                              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 opacity-0 group-hover/goal:opacity-100 translate-y-1 group-hover/goal:translate-y-0 transition-all duration-250 ease-[cubic-bezier(0.23,1,0.32,1)] pointer-events-none">
+                              <div className={`absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 transition-all duration-250 ease-[cubic-bezier(0.23,1,0.32,1)] pointer-events-none
+                  ${isActive ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 group-hover/goal:opacity-100 group-hover/goal:translate-y-0"}`}>
                                 <div className="w-48 rounded-xl p-3 border border-black/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.08)]"
                                   style={{ background: "rgba(255,255,255,0.92)", backdropFilter: "blur(24px) saturate(1.8)", WebkitBackdropFilter: "blur(24px) saturate(1.8)" }}>
                                   <div className="text-[10px] font-semibold text-[#1d1d1f] mb-2">{hint}</div>
                                   <div className="space-y-1 mb-2.5">
                                     {details.map((d) => (
-                                      <div key={d} className="flex items-center gap-1.5 text-[9px] text-black/40">
+                                      <div key={d} className="flex items-center gap-1.5 text-[9px] text-black/60">
                                         <div className="w-1 h-1 rounded-full bg-[#6B5CE7]/40" />{d}
                                       </div>
                                     ))}
@@ -1358,7 +1464,7 @@ export default function HomePage() {
                     {/* Scroll hint */}
                     <motion.button onClick={() => scrollTo("showcase-section")}
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2, duration: 0.8 }}
-                      className="mt-10 flex items-center gap-2 text-black/20 hover:text-black/40 transition-colors cursor-pointer">
+                      className="mt-10 flex items-center gap-2 text-black/40 hover:text-black/60 transition-colors cursor-pointer">
                       <span className="text-[10px] tracking-widest uppercase">查看案例</span>
                       <motion.div animate={{ y: [0, 4, 0] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}>
                         <ArrowDown className="w-3.5 h-3.5" />
@@ -1382,7 +1488,7 @@ export default function HomePage() {
                       {/* Browser chrome */}
                       <div className="px-3 py-2 border-b border-black/[0.04] bg-black/[0.02] flex items-center gap-2">
                         <div className="flex gap-1"><div className="w-2 h-2 rounded-full bg-[#ff5f57]" /><div className="w-2 h-2 rounded-full bg-[#febc2e]" /><div className="w-2 h-2 rounded-full bg-[#28c840]" /></div>
-                        <div className="flex-1 mx-2 px-3 py-1 rounded-md bg-black/[0.04] text-[9px] text-black/30 font-mono truncate">https://adventure.co</div>
+                        <div className="flex-1 mx-2 px-3 py-1 rounded-md bg-black/[0.04] text-[9px] text-black/50 font-mono truncate">https://adventure.co</div>
                       </div>
                       {/* Website preview */}
                       <div className="relative h-[200px] overflow-hidden">
@@ -1433,7 +1539,7 @@ export default function HomePage() {
                       {/* Progress bar */}
                       <div className="mt-3 pt-3 border-t border-black/[0.04]">
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[9px] text-black/30">进度</span>
+                          <span className="text-[9px] text-black/50">进度</span>
                           <span className="text-[9px] font-medium text-[#34C759]">100% 完成</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-black/[0.06] overflow-hidden">
@@ -1538,7 +1644,7 @@ export default function HomePage() {
                           <div className="text-3xl sm:text-4xl font-semibold text-[#1d1d1f] tabular-nums tracking-tight">
                             <AnimatedCounter value={stat.value} suffix={stat.suffix} prefix={stat.prefix || ""} />
                           </div>
-                          <div className="mt-1.5 text-xs text-black/30">{stat.label}</div>
+                          <div className="mt-1.5 text-xs text-black/50">{stat.label}</div>
                         </motion.div>
                       ))}
                     </div>
@@ -1588,53 +1694,7 @@ export default function HomePage() {
                 {/* 2×2 Feature Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-[1200px] mx-auto">
                   {CORE_FEATURES.map((feat, i) => (
-                    <motion.div
-                      key={feat.title}
-                      initial={{ opacity: 0, y: 24 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.15, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                      whileHover={{ y: -8, boxShadow: "0 24px 60px rgba(0,0,0,0.08)", transition: { duration: 0.3 } }}
-                      className="group relative rounded-3xl p-8 cursor-pointer min-h-[280px] flex flex-col"
-                      style={{
-                        background: "rgba(255,255,255,0.72)",
-                        border: "1px solid rgba(255,255,255,0.8)",
-                        backdropFilter: "blur(30px)",
-                        WebkitBackdropFilter: "blur(30px)",
-                        boxShadow: "0 20px 50px rgba(0,0,0,0.06)",
-                      }}
-                    >
-                      {/* Top: Icon + illustration area */}
-                      <div className="flex items-start justify-between mb-6">
-                        {/* Circular icon */}
-                        <motion.div
-                          whileHover={{ rotate: -8, transition: { duration: 0.3 } }}
-                          className="rounded-full flex items-center justify-center shrink-0"
-                          style={{ width: 70, height: 70, background: `${feat.color}10` }}
-                        >
-                          <feat.icon className="w-10 h-10" style={{ color: feat.color }} />
-                        </motion.div>
-                        {/* Illustration placeholder — low opacity */}
-                        <div className="w-24 h-16 rounded-lg opacity-[0.12] blur-[1px]"
-                          style={{ background: `linear-gradient(135deg, ${feat.color}30, ${feat.color}10)` }} />
-                      </div>
-
-                      {/* Title */}
-                      <h3 className="text-[24px] sm:text-[26px] font-bold text-[#111827] mb-3">{feat.title}</h3>
-
-                      {/* Description */}
-                      <p className="text-[15px] sm:text-[17px] text-[#64748B] leading-[1.8] flex-1">{feat.desc}</p>
-
-                      {/* Learn more link */}
-                      <button
-                        onClick={() => scrollTo(feat.anchor)}
-                        className="mt-5 flex items-center gap-1.5 text-[15px] sm:text-[16px] font-semibold transition-all duration-200 hover:gap-3 cursor-pointer"
-                        style={{ color: feat.color }}
-                      >
-                        <span>了解详情</span>
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </motion.div>
+                    <FeatureCard key={feat.title} feat={feat} index={i} onLearnMore={() => scrollTo(feat.anchor)} />
                   ))}
                 </div>
 
@@ -1771,7 +1831,7 @@ export default function HomePage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6 }}
-                className="max-w-[1200px] mx-auto relative rounded-3xl overflow-hidden px-8 sm:px-16 py-16 text-center"
+                className="cta-banner max-w-[1200px] mx-auto relative rounded-3xl overflow-hidden px-8 sm:px-16 py-16 text-center"
                 style={{ background: "linear-gradient(135deg, #6366F1, #8B5CF6)" }}
               >
                 {/* Background glow effects */}
@@ -1791,6 +1851,12 @@ export default function HomePage() {
                   </div>
                 </div>
 
+                {/* Shine sweep on hover — transform-only, clipped by banner overflow-hidden (no repaint) */}
+                <div
+                  className="cta-shine pointer-events-none absolute inset-0 z-0"
+                  style={{ background: "linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.20) 50%, transparent 65%)" }}
+                />
+
                 {/* Content */}
                 <div className="relative z-10">
                   <h2 className="text-[28px] sm:text-[32px] font-extrabold text-white tracking-tight mb-3">
@@ -1806,8 +1872,13 @@ export default function HomePage() {
                       whileHover={{ scale: 1.04 }}
                       whileTap={{ scale: 0.97 }}
                       onClick={scrollToTop}
-                      className="inline-flex items-center gap-2 h-11 px-7 rounded-[22px] text-[14px] font-semibold bg-white text-[#6366F1] shadow-[0_4px_20px_rgba(0,0,0,0.15)] hover:shadow-[0_6px_28px_rgba(0,0,0,0.2)] transition-shadow duration-200 cursor-pointer"
+                      className="group relative inline-flex items-center gap-2 h-11 px-7 rounded-[22px] text-[14px] font-semibold bg-white text-[#6366F1] shadow-[0_4px_20px_rgba(0,0,0,0.15)] cursor-pointer"
                     >
+                      {/* Pre-rendered hover shadow — opacity swap, no box-shadow repaint */}
+                      <span
+                        className="pointer-events-none absolute inset-0 rounded-[22px] opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        style={{ boxShadow: "0 6px 28px rgba(0,0,0,0.2)" }}
+                      />
                       开始免费体验
                       <ArrowUpRight className="w-4 h-4" />
                     </motion.button>
@@ -1835,9 +1906,9 @@ export default function HomePage() {
               <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-3.5 h-3.5 text-[#0071E3]" />
-                  <span className="text-xs font-semibold text-black/40">Code Designer AI</span>
+                  <span className="text-xs font-semibold text-black/60">Code Designer AI</span>
                 </div>
-                <p className="text-[11px] text-black/20">AI 驱动的网页逆向工程工具 · 从 URL 到 React 项目</p>
+                <p className="text-[11px] text-black/60">AI 驱动的网页逆向工程工具 · 从 URL 到 React 项目</p>
               </div>
             </footer>
           </motion.div>
@@ -1853,12 +1924,12 @@ export default function HomePage() {
                 </span>
                 <div className="h-4 w-px bg-black/[0.1]" />
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/[0.04] border border-black/[0.06]">
-                  <Globe className="w-3 h-3 text-black/40" />
+                  <Globe className="w-3 h-3 text-black/60" />
                   <span className="text-[11px] text-black/50 font-mono max-w-[200px] truncate">{taskUrl}</span>
                 </div>
                 <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border
                   ${taskMode === "enhancement" ? "bg-[#6B5CE7]/[0.07] border-[#6B5CE7]/20" : "bg-black/[0.04] border-black/[0.06]"}`}>
-                  {taskMode === "enhancement" ? <Paintbrush className="w-3 h-3 text-[#6B5CE7]" /> : <FileText className="w-3 h-3 text-black/40" />}
+                  {taskMode === "enhancement" ? <Paintbrush className="w-3 h-3 text-[#6B5CE7]" /> : <FileText className="w-3 h-3 text-black/60" />}
                   <span className={`text-[11px] font-medium ${taskMode === "enhancement" ? "text-[#6B5CE7]" : "text-black/50"}`}>
                     {taskMode === "enhancement" ? "设计升级" : "精准复刻"}
                   </span>
@@ -1881,11 +1952,11 @@ export default function HomePage() {
                 {isRunning && (
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#0071E3]/10 border border-[#0071E3]/20">
-                      <Loader2 className="w-3 h-3 text-[#0071E3] animate-spin" /><span className="text-[11px] text-[#0071E3] font-medium">运行中...</span>
+                      <Loader2 className="w-3 h-3 text-[#0071E3] animate-spin" /><span className="text-[11px] text-[#0071E3] font-medium">{activeAgent ? `运行中 · ${activeAgent.name}` : "运行中..."}{activeAgent && activeAgent.progress > 0 ? ` ${activeAgent.progress}%` : ""}</span>
                     </div>
                     <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/[0.04] border border-black/[0.06]">
-                      <Clock className="w-3 h-3 text-black/40" />
-                      <span className="text-[11px] text-black/45">预计 30-40 秒</span>
+                      <Clock className="w-3 h-3 text-black/60" />
+                      <span className="text-[11px] text-black/65">已用时 {elapsedLabel}</span>
                     </div>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
@@ -1937,7 +2008,7 @@ export default function HomePage() {
                 onClick={() => setShowLoginModal(false)}
                 className="absolute top-4 right-4 w-7 h-7 rounded-full bg-black/[0.04] hover:bg-black/[0.08] flex items-center justify-center transition-colors cursor-pointer z-10"
               >
-                <span className="text-black/40 text-sm leading-none">✕</span>
+                <span className="text-black/60 text-sm leading-none">✕</span>
               </button>
 
               {/* Content */}
@@ -1948,7 +2019,7 @@ export default function HomePage() {
                     <Code2 className="w-5 h-5 text-white" />
                   </div>
                   <h2 id="login-modal-title" className="text-xl font-semibold text-[#1d1d1f] tracking-tight">登录 Code Designer AI</h2>
-                  <p className="mt-1 text-xs text-black/35">输入邮箱和密码登录或注册</p>
+                  <p className="mt-1 text-xs text-black/55">输入邮箱和密码登录或注册</p>
                 </div>
 
                 {/* Form */}
@@ -1957,13 +2028,13 @@ export default function HomePage() {
                   <div>
                     <label className="block text-xs font-medium text-black/50 mb-1.5">邮箱</label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/20" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/40" />
                       <input
                         name="email"
                         type="text"
                         required
                         placeholder="you@example.com"
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-black/[0.03] border border-black/[0.06] text-sm text-[#1d1d1f] placeholder:text-black/20 outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3]/30 transition-all"
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-black/[0.03] border border-black/[0.06] text-sm text-[#1d1d1f] placeholder:text-black/40 outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3]/30 transition-all"
                       />
                     </div>
                   </div>
@@ -1972,13 +2043,13 @@ export default function HomePage() {
                   <div>
                     <label className="block text-xs font-medium text-black/50 mb-1.5">密码</label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/20" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/40" />
                       <input
                         name="password"
                         type="password"
                         required
                         placeholder="••••••••"
-                        className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-black/[0.03] border border-black/[0.06] text-sm text-[#1d1d1f] placeholder:text-black/20 outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3]/30 transition-all"
+                        className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-black/[0.03] border border-black/[0.06] text-sm text-[#1d1d1f] placeholder:text-black/40 outline-none focus:ring-2 focus:ring-[#0071E3]/20 focus:border-[#0071E3]/30 transition-all"
                       />
                     </div>
                   </div>
@@ -1995,7 +2066,7 @@ export default function HomePage() {
                 </form>
 
                 {/* Footer */}
-                <p className="mt-5 text-center text-[11px] text-black/25">
+                <p className="mt-5 text-center text-[11px] text-black/45">
                   还没有账号？使用邮箱即可注册
                 </p>
               </div>
@@ -2048,12 +2119,12 @@ export default function HomePage() {
                 <h2 className="text-xl font-semibold text-[#1d1d1f] tracking-tight mb-2">生成失败</h2>
 
                 {/* Error message */}
-                <p className="text-sm text-[#86868b] leading-relaxed mb-6 px-2">
+                <p className="text-sm text-[#6e6e73] leading-relaxed mb-6 px-2">
                   {failedTask.errorMessage}
                 </p>
 
                 {/* Quota refunded hint */}
-                <p className="text-xs text-[#86868b]/70 mb-6">
+                <p className="text-xs text-[#6e6e73]/70 mb-6">
                   本次消耗的额度已自动退还。
                 </p>
 
@@ -2099,7 +2170,7 @@ export default function HomePage() {
               <div className="w-full max-w-md mx-4 rounded-2xl overflow-hidden pointer-events-auto" style={{ background: "rgba(255,255,255,0.98)", backdropFilter: "blur(40px) saturate(1.8)", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 24px 80px rgba(0,0,0,0.18)" }}>
                 {/* Close button */}
                 <button onClick={() => setActiveModal(null)} className="absolute top-4 right-4 w-7 h-7 rounded-full bg-black/[0.04] hover:bg-black/[0.08] flex items-center justify-center transition-colors cursor-pointer z-10">
-                  <X className="w-3.5 h-3.5 text-black/40" />
+                  <X className="w-3.5 h-3.5 text-black/60" />
                 </button>
 
                 {/* 个人资料 */}
@@ -2158,7 +2229,7 @@ function ProfileModalContent({ userInfo, onClose, onUpdateUser }: {
         </div>
         <div>
           <h2 className="text-lg font-semibold text-[#1d1d1f]">个人资料</h2>
-          <p className="text-xs text-black/35">查看和编辑你的账户信息</p>
+          <p className="text-xs text-black/55">查看和编辑你的账户信息</p>
         </div>
       </div>
       <div className="space-y-4">
@@ -2168,8 +2239,8 @@ function ProfileModalContent({ userInfo, onClose, onUpdateUser }: {
         </div>
         <div>
           <label className="block text-xs font-medium text-black/50 mb-1.5">邮箱</label>
-          <input defaultValue={userInfo?.email || ''} disabled className="w-full h-10 px-3 rounded-lg bg-black/[0.02] border border-black/[0.04] text-sm text-black/30 cursor-not-allowed" />
-          <p className="mt-1 text-[10px] text-black/20">邮箱不可修改，用于登录识别</p>
+          <input defaultValue={userInfo?.email || ''} disabled className="w-full h-10 px-3 rounded-lg bg-black/[0.02] border border-black/[0.04] text-sm text-black/50 cursor-not-allowed" />
+          <p className="mt-1 text-[10px] text-black/40">邮箱不可修改，用于登录识别</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-black/50 mb-1.5">头像</label>
@@ -2219,7 +2290,7 @@ function PreferencesModalContent({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <h2 className="text-lg font-semibold text-[#1d1d1f]">偏好设置</h2>
-          <p className="text-xs text-black/35">自定义你的使用体验</p>
+          <p className="text-xs text-black/55">自定义你的使用体验</p>
         </div>
       </div>
       <div className="space-y-4">
@@ -2237,7 +2308,7 @@ function PreferencesModalContent({ onClose }: { onClose: () => void }) {
             {[{ label: '精准复刻', desc: '95% 一致' }, { label: '设计升级', desc: '80% + 20%' }].map((m) => (
               <button key={m.label} onClick={() => setMode(m.label)} className={`flex-1 px-3 py-2 rounded-lg text-left transition-colors cursor-pointer ${mode === m.label ? 'bg-[#AF52DE]/10 border border-[#AF52DE]/20' : 'bg-black/[0.03] border border-transparent hover:bg-black/[0.05]'}`}>
                 <p className="text-xs font-medium text-[#1d1d1f]">{m.label}</p>
-                <p className="text-[10px] text-black/30">{m.desc}</p>
+                <p className="text-[10px] text-black/50">{m.desc}</p>
               </button>
             ))}
           </div>
@@ -2295,7 +2366,7 @@ function AccountModalContent({ quota, onClose }: {
         </div>
         <div>
           <h2 className="text-lg font-semibold text-[#1d1d1f]">账号设置</h2>
-          <p className="text-xs text-black/35">管理密码、安全和订阅</p>
+          <p className="text-xs text-black/55">管理密码、安全和订阅</p>
         </div>
       </div>
       <div className="space-y-4">
@@ -2316,7 +2387,7 @@ function AccountModalContent({ quota, onClose }: {
           <div className="flex items-center justify-between py-2">
             <div>
               <p className="text-xs font-medium text-[#1d1d1f]">当前套餐</p>
-              <p className="text-[10px] text-black/30">免费版 · {quota ? `${quota.limit} 次/天` : '—'}</p>
+              <p className="text-[10px] text-black/50">免费版 · {quota ? `${quota.limit} 次/天` : '—'}</p>
             </div>
             <button onClick={() => alert('Pro 版本即将推出，敬请期待！')} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white cursor-pointer" style={{ background: "linear-gradient(135deg, #FF9500, #FF6A00)" }}>升级 Pro</button>
           </div>

@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useGSAP } from '@gsap/react';
+
+gsap.registerPlugin(ScrollTrigger, useGSAP);
 
 // =============================================================================
 // Data — 替换为真实案例内容
@@ -12,7 +17,8 @@ export interface ShowcaseItem {
   title: string;
   subtitle: string;
   category: string;
-  meta: string; // e.g. "产品 · 18 分钟阅读"
+  score: number; // 还原度百分比（GSAP 滚动计数）
+  components: number; // 组件数
   media: {
     type: 'image' | 'video';
     src: string;
@@ -27,7 +33,7 @@ const SHOWCASE_DATA: ShowcaseItem[] = [
     title: 'KULTURA',
     subtitle: 'AI 重构印尼旅游沉浸式着陆页，航拍海岸线与热带风情视觉叙事',
     category: '旅游探索',
-    meta: '96% 还原度 · 26 组件',
+    score: 96, components: 26,
     media: { type: 'image', src: '/showcase/kultura.jpg' },
     thumbnail: '/showcase/kultura.jpg',
   },
@@ -36,7 +42,7 @@ const SHOWCASE_DATA: ShowcaseItem[] = [
     title: 'NexusMind',
     subtitle: 'AI 重新构建人机协作统一工作区，暗色宇宙主题沉浸式体验',
     category: 'AI 协作平台',
-    meta: '97% 还原度 · 47 组件',
+    score: 97, components: 47,
     media: { type: 'image', src: '/showcase/nexusmind.jpg' },
     thumbnail: '/showcase/nexusmind.jpg',
   },
@@ -45,7 +51,7 @@ const SHOWCASE_DATA: ShowcaseItem[] = [
     title: 'Adventure',
     subtitle: 'AI 重现自然山脉全景沉浸式着陆页，视差滚动体验',
     category: '旅游探索',
-    meta: '96% 还原度 · 23 组件',
+    score: 96, components: 23,
     media: { type: 'image', src: '/showcase/adventure.jpg' },
     thumbnail: '/showcase/adventure.jpg',
   },
@@ -54,7 +60,7 @@ const SHOWCASE_DATA: ShowcaseItem[] = [
     title: 'Netflix · Dune',
     subtitle: 'AI 重构流媒体电影详情页，角色视觉叙事与暗色 UI',
     category: '影视娱乐',
-    meta: '95% 还原度 · 34 组件',
+    score: 95, components: 34,
     media: { type: 'image', src: '/showcase/netflix-dune.jpg' },
     thumbnail: '/showcase/netflix-dune.jpg',
   },
@@ -63,7 +69,7 @@ const SHOWCASE_DATA: ShowcaseItem[] = [
     title: 'Joker',
     subtitle: 'AI 还原暗色电影风格高对比视觉冲击宣传页',
     category: '电影宣传',
-    meta: '98% 还原度 · 18 组件',
+    score: 98, components: 18,
     media: { type: 'image', src: '/showcase/joker.jpg' },
     thumbnail: '/showcase/joker.jpg',
   },
@@ -72,11 +78,45 @@ const SHOWCASE_DATA: ShowcaseItem[] = [
     title: 'V Solar',
     subtitle: 'AI 构建未来风太阳能科技景观着陆页',
     category: '新能源科技',
-    meta: '94% 还原度 · 29 组件',
+    score: 94, components: 29,
     media: { type: 'image', src: '/showcase/vsolar.jpg' },
     thumbnail: '/showcase/vsolar.jpg',
   },
 ];
+
+// =============================================================================
+// Score counter — 「还原度 X%」 counts up from 0 via GSAP when scrolled into view
+// =============================================================================
+
+function ScoreNum({ value }: { value: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useGSAP(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.textContent = '0%'; // reset before paint; count up on scroll
+    // Landing page scrolls inside an inner `h-screen overflow-y-auto` container,
+    // the window itself never scrolls — point ScrollTrigger at the real scroller.
+    const scroller = el.closest('.overflow-y-auto');
+    const counter = { value: 0 };
+    gsap.to(counter, {
+      value,
+      duration: 1.1,
+      ease: 'power1.out',
+      scrollTrigger: {
+        trigger: el,
+        start: 'top 92%',
+        once: true,
+        ...(scroller ? { scroller } : {}),
+      },
+      onUpdate: () => {
+        el.textContent = `${Math.round(counter.value)}%`;
+      },
+    });
+  }, { scope: ref, dependencies: [value], revertOnUpdate: true });
+
+  return <span ref={ref} className="score-num">{value}%</span>;
+}
 
 // =============================================================================
 // Component
@@ -136,7 +176,7 @@ export default function OpenAIShowcase() {
                     <div className="flex items-center gap-2 text-[13px] text-[#999]">
                       <span className="px-2 py-0.5 rounded bg-[#f5f5f5] text-[#888] font-medium">{active.category}</span>
                       <span className="text-[#ddd]">·</span>
-                      <span>{active.meta}</span>
+                      <span><ScoreNum value={active.score} /> 还原度 · {active.components} 组件</span>
                     </div>
                   </div>
                 </motion.div>
@@ -166,7 +206,7 @@ export default function OpenAIShowcase() {
                       <h4 className="text-[14px] font-semibold mb-1.5 text-[#333]">{item.title}</h4>
                       <div className="flex items-center gap-2 text-[11px] text-[#999]">
                         <span className="px-1.5 py-0.5 rounded bg-[#f5f5f5] text-[#888] font-medium">{item.category}</span>
-                        <span>{item.meta}</span>
+                        <span><ScoreNum value={item.score} /> 还原度 · {item.components} 组件</span>
                       </div>
                     </div>
                   </motion.button>

@@ -57,7 +57,13 @@ function isPrivateIP(ip: string): boolean {
 }
 
 /** 校验 URL 安全性：仅 http/https，拒绝危险主机名与私网 IP（含 DNS 解析后校验） */
-async function assertSafeUrl(rawUrl: string): Promise<string> {
+/**
+ * 校验 URL 安全性并返回规范化后的地址。
+ *
+ * 供 Browser Intelligence Layer（Phase 1）复用 —— 采集层与截图层必须共用
+ * 同一套 SSRF 防护，否则新模块会成为绕过点。
+ */
+export async function assertSafeUrl(rawUrl: string): Promise<string> {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);

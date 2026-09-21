@@ -5,7 +5,6 @@ import { sleep } from '@/lib/utils';
 import { track, createGenerationId } from '@/lib/track';
 import {
   mockDesignAnalysis,
-  mockDesignDecision,
   mockComponentTree,
   mockGeneratedCode,
   mockQAIssues,
@@ -16,12 +15,19 @@ import {
   mockCodeValidation,
   mockEnhancementPlan,
 } from '@/lib/mock-data';
-import type { AgentId, DesignAnalysis, DesignDecision, LogType, VisualScore, EnhancementPlan } from '@/types/agent';
+import type { AgentId, DesignAnalysis, LogType, VisualScore, EnhancementPlan, OptimizationPlan } from '@/types/agent';
+import type { ReconstructionScore } from '@/types/reconstruction';
 import { matchStyle, generateDesignSystem, formatStyleContext, formatStyleContextCompact } from '@/lib/knowledge-base';
 import type { StyleMatcherInput } from '@/lib/knowledge-base';
-import { normalizeVisualScore, shouldOptimize, computeOverallScore, MAX_OPTIMIZATION_ROUNDS, DIMENSION_LABELS } from '@/lib/visual-evaluation';
+import {
+  normalizeVisualScore,
+  normalizeOptimizationPlan,
+  formatOptimizationIssues,
+  DIMENSION_LABELS,
+} from '@/lib/visual-evaluation';
 import { buildPreviewHtml, postProcessHtml } from '@/lib/preview-utils';
 import { validateGeneratedCode } from '@/lib/code-rules';
+import { extractAnimationScript } from '@/lib/animation';
 import { normalizeEnhancementPlan, GENERATION_MODES } from '@/lib/design-mode';
 
 // ---------------------------------------------------------------------------
@@ -39,11 +45,13 @@ interface MiMoApiResponse {
 
 /** Call the server-side MiMo API for a specific workflow step */
 async function callMimoAPI(
-  step: 'vision' | 'critic' | 'planning' | 'code' | 'qa' | 'optimize' | 'enhance' | 'preview',
+  step: 'vision' | 'planning' | 'code' | 'animation' | 'qa' | 'optimize' | 'enhance' | 'preview',
   url: string,
   context?: Record<string, unknown>,
   generationId?: string,
   screenshotBase64?: string,
+  /** Sprint B：qa step 的第二张图（生成页截图），随 context 的 diffReportJson 一起注入。 */
+  cloneScreenshotBase64?: string,
 ): Promise<MiMoApiResponse> {
   const ac = workflowAbortController;
 
@@ -89,19 +97,74 @@ async function callMimoAPI(
     }
   }
 
+  // 推流前清空当前 agent 的残留 streamingText，避免上一阶段内容串场
+  const streamingAgentId = useAgentStore.getState().task.currentAgent ?? null;
+  if (streamingAgentId) {
+    useAgentStore.getState().updateAgent(streamingAgentId, { streamingText: '' });
+  }
+
   const response = await fetch('/api/mimo', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ step, url, context, modelConfig, generationId, screenshotBase64 }),
+    body: JSON.stringify({ step, url, context, modelConfig, generationId, screenshotBase64, cloneScreenshotBase64 }),
     signal: ac?.signal,
   });
 
   if (!response.ok) {
+    // 非流式错误回退（400/429/500 JSON）
     const errBody = await response.json().catch(() => ({ error: 'Unknown error' }));
     throw new Error(errBody.error || `API error: ${response.status}`);
   }
 
-  return response.json();
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('text/event-stream')) {
+    // 非流式 JSON 回退（兼容性 / 安全检查）
+    return response.json();
+  }
+
+  // ---- SSE 流式消费：把 delta 实时写入 agent.streamingText ----
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let acc = '';
+  let lastFlush = 0;
+  const FLUSH_EVERY = 80; // 每累积 ~80 字符才更新一次 store，降低重渲染开销
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    const events = chunk.split('\n\n');
+    for (const evt of events) {
+      const trimmed = evt.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === '[DONE]') continue;
+      let parsed: { type?: string; text?: string; payload?: MiMoApiResponse; error?: string };
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        continue;
+      }
+              if ((parsed.type === 'delta' || parsed.type === 'reasoning') && typeof parsed.text === 'string') {
+                acc += parsed.text;
+                if (streamingAgentId && acc.length - lastFlush >= FLUSH_EVERY) {
+                  lastFlush = acc.length;
+                  useAgentStore.getState().updateAgent(streamingAgentId, { streamingText: acc });
+                }
+              } else if (parsed.type === 'done' && parsed.payload) {
+        // 收尾：把剩余文本 flush 进去再返回结构化结果
+        if (streamingAgentId) {
+          useAgentStore.getState().updateAgent(streamingAgentId, { streamingText: acc });
+        }
+        return parsed.payload;
+      } else if (parsed.type === 'error') {
+        throw new Error(parsed.error || 'Stream error');
+      }
+    }
+  }
+
+  // 流结束但缺少 done 事件：兜底抛错
+  throw new Error('SSE stream ended without done event');
 }
 
 // ---------------------------------------------------------------------------
@@ -113,6 +176,13 @@ let workflowAbortController: AbortController | null = null;
 // P1-6: Preflight result cache — avoid redundant API connectivity tests
 const preflightCache = new Map<string, { ok: boolean; expiresAt: number }>();
 const PREFLIGHT_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Phase 7 — 手动优化模式。
+ * 只有用户显式点击「应用优化方案」时才会被写入；写入后由下一轮 code 步骤消费一次并清空。
+ * 主流程永远不会自动填充它（这正是「不自动重生成」的保证）。
+ */
+let pendingOptimizationIssues: string | null = null;
 
 /** Signal the running workflow to cancel */
 export function cancelWorkflow() {
@@ -201,52 +271,92 @@ function normalizeDesignAnalysis(raw: Record<string, unknown>): DesignAnalysis {
   };
 }
 
-/**
- * Normalize the raw Critic Agent response into a guaranteed-complete
- * DesignDecision object (same rationale as normalizeDesignAnalysis).
- *
- * Array fields default to EMPTY arrays rather than mock values: keep / remove /
- * improve / structureIssues are the Critic's actual recommendations, so we must
- * never fabricate them — an empty list simply means "nothing to change". Only
- * descriptive string / score fields fall back to the mock for a sensible display.
- */
-function normalizeDesignDecision(raw: Record<string, unknown>): DesignDecision {
-  const arr = <T,>(val: unknown): T[] => (Array.isArray(val) ? (val as T[]) : []);
-  const str = (val: unknown, fallback: string): string =>
-    typeof val === 'string' && val.trim() ? val : fallback;
-  const num = (val: unknown, fallback: number): number =>
-    typeof val === 'number' && Number.isFinite(val) ? val : fallback;
-  const m = mockDesignDecision;
-  const rawScore = (raw.score && typeof raw.score === 'object' ? raw.score : {}) as Record<string, number>;
-  const rawStyle = (raw.style && typeof raw.style === 'object' ? raw.style : {}) as Record<string, unknown>;
-  return {
-    brandPosition:   str(raw.brandPosition, m.brandPosition),
-    userFeeling:     arr<string>(raw.userFeeling),
-    designGoal:      str(raw.designGoal, m.designGoal),
-    visualHierarchy: arr<{ element: string; score: number }>(raw.visualHierarchy),
-    structureIssues: arr<{ problem: string; solution: string }>(raw.structureIssues),
-    score: {
-      layout:     num(rawScore.layout,     m.score.layout),
-      typography: num(rawScore.typography, m.score.typography),
-      color:      num(rawScore.color,      m.score.color),
-      image:      num(rawScore.image,      m.score.image),
-      premium:    num(rawScore.premium,    m.score.premium),
-    },
-    totalScore: num(raw.totalScore, m.totalScore),
-    keep:    arr<string>(raw.keep),
-    remove:  arr<string>(raw.remove),
-    improve: arr<string>(raw.improve),
-    style: {
-      direction: str(rawStyle.direction, m.style.direction),
-      tone:      str(rawStyle.tone,      m.style.tone),
-    },
-    round: typeof raw.round === 'number' ? raw.round : undefined,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Workflow hook
 // ---------------------------------------------------------------------------
+
+/**
+ * Phase 7 — 手动生成优化方案（Optimization Agent）。
+ *
+ * 设计约束：本函数**只能**被用户点击触发，主流程 runWorkflow 里没有任何调用，
+ * 因此不存在「评分不达标就自动重生成」的闭环。
+ *
+ * @returns 归一化后的方案；无评分 / 模型未返回可解析结构时返回 null。
+ */
+export async function triggerManualOptimization(): Promise<OptimizationPlan | null> {
+  const task = useAgentStore.getState().task;
+  const score = task.qaResult?.visualScore;
+
+  if (!task.url) {
+    logAndProgress('qa', 100, '尚未指定目标网址，无法生成优化方案', 'warning');
+    return null;
+  }
+  if (!score) {
+    logAndProgress('qa', 100, '尚无视觉评分，请先完成一次生成后再生成优化方案', 'warning');
+    return null;
+  }
+
+  const round = (task.qaResult?.optimizationRounds ?? 0) + 1;
+  logAndProgress('qa', 100, `正在生成第 ${round} 轮优化方案（基于总分 ${score.overall_score}）...`);
+
+  try {
+    const res = await callMimoAPI('optimize', task.url, {
+      visualScoreJson: JSON.stringify(score),
+      round,
+    });
+
+    const plan = normalizeOptimizationPlan(res.result ?? res.raw, round);
+    if (!plan) {
+      logAndProgress('qa', 100, '模型未返回可解析的优化方案，请稍后重试', 'error');
+      return null;
+    }
+
+    useAgentStore.getState().setTaskPartial({ optimizationPlan: plan });
+    logAndProgress(
+      'qa',
+      100,
+      `优化方案已生成：${plan.items.length} 项（预计 +${plan.estimatedScoreIncrease} 分）`,
+      'success',
+    );
+    for (const it of plan.items.slice(0, 5)) {
+      logAndProgress('qa', 100, `  [${it.priority}] ${it.problem}`);
+    }
+    if (plan.diagnosis.designDNAAtRisk) {
+      logAndProgress('qa', 100, '  ⚠️ 方案标注：设计 DNA 存在流失风险，应用时请注意保留原站特征', 'warning');
+    }
+    return plan;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logAndProgress('qa', 100, `优化方案生成失败：${msg}`, 'error');
+    return null;
+  }
+}
+
+/**
+ * Phase 7 — 手动应用优化方案：把方案转成文本指令，重启一次完整生成。
+ *
+ * 与「自动闭环」的区别：重启必须由用户点击发起，且每次只消费一份方案。
+ */
+export function applyOptimizationPlan(): void {
+  const store = useAgentStore.getState();
+  const task = store.task;
+  const plan = task.optimizationPlan;
+
+  if (!plan || !task.url) {
+    logAndProgress('qa', 100, '没有可应用的优化方案', 'warning');
+    return;
+  }
+
+  pendingOptimizationIssues = formatOptimizationIssues(plan);
+  const nextRound = plan.round + 1;
+
+  store.startTask(task.url, task.goal ?? undefined, task.prompt, task.mode, task.model);
+  // startTask 会重建 task，这里把方案带回去（轮次 +1）以便对比前后效果
+  useAgentStore.getState().setTaskPartial({
+    optimizationPlan: { ...plan, round: nextRound },
+  });
+  logAndProgress('qa', 0, `已应用优化方案，开始第 ${nextRound} 轮重新生成...`, 'info');
+}
 
 export function useWorkflow() {
   const isRunning = useAgentStore((s) => s.isRunning);
@@ -322,7 +432,7 @@ async function runWorkflow() {
   // API Key 检查：已知平台端点由服务端 .env 提供 Key，无需客户端检查
   // 仅对第三方端点（OpenAI, Anthropic 等）需要 BYOK
   const PLATFORM_ENDPOINTS = [
-    'ws-ua926r250lel9okt.cn-beijing.maas.aliyuncs.com',
+    'dashscope.aliyuncs.com',
     'api.xiaomimimo.com',
   ];
   const isPlatformEndpoint = PLATFORM_ENDPOINTS.some(ep => activeProvider.endpoint?.includes(ep));
@@ -660,107 +770,6 @@ async function runWorkflow() {
 
     await cancellableSleep(300);
     completeAgent('stylematcher');
-    track({ type: 'generation_stage', id: generationId, stage: 'critic', message: `${trackUser.name} 的任务进入 Critic 设计评审阶段` });
-    await cancellableSleep(300);
-
-    // =====================================================================
-    // 3. Design Critic Agent — 设计智能评审层
-    // 理解原网页背后的设计逻辑，判断哪些应该保留、优化、重构
-    // =====================================================================
-    startAgent('critic');
-    store.setActiveSection('critic');
-
-    logAndProgress('critic', 5, '正在连接 AI 设计评审模型...');
-    await cancellableSleep(200);
-
-    const criticInput = useAgentStore.getState().task.designAnalysis;
-
-    logAndProgress('critic', 10, '加载设计规则库 (5 条核心规则 + 五维评分模型)...');
-    await cancellableSleep(200);
-
-    try {
-      const criticResult = await callMimoAPI('critic', url, {
-        designAnalysis: criticInput,
-        designKnowledge: visionResult?.designKnowledge || undefined,
-        styleContext: designSystem ? formatStyleContextCompact(styleMatch, designSystem) : undefined,
-      }, generationId, websiteScreenshot);
-      logAndProgress('critic', 25, 'AI: 设计评审决策已返回', 'success');
-      await cancellableSleep(200);
-
-      const decision = criticResult.result as Record<string, unknown>;
-
-      // Task 1: 页面定位分析
-      if (decision.brandPosition) {
-        logAndProgress('critic', 35, `页面定位: ${decision.brandPosition}`, 'success');
-        const feelings = decision.userFeeling as string[] | undefined;
-        if (feelings?.length) {
-          logAndProgress('critic', 38, `  用户感知: ${feelings.join(' / ')}`);
-        }
-        if (decision.designGoal) {
-          logAndProgress('critic', 40, `  设计目标: ${decision.designGoal}`);
-        }
-      }
-      await cancellableSleep(300);
-
-      // Task 2: 视觉层级分析
-      const hierarchy = decision.visualHierarchy as Array<{ element?: string; score?: number }> | undefined;
-      if (hierarchy?.length) {
-        logAndProgress('critic', 48, `视觉层级: 识别 ${hierarchy.length} 级焦点`, 'success');
-        for (const h of hierarchy.slice(0, 3)) {
-          logAndProgress('critic', 50, `  ${h.element || '—'} (权重 ${h.score ?? '—'})`);
-          await cancellableSleep(150);
-        }
-      }
-      await cancellableSleep(300);
-
-      // Task 3: 页面结构审查
-      const structureIssues = decision.structureIssues as Array<{ problem?: string; solution?: string }> | undefined;
-      if (structureIssues?.length) {
-        logAndProgress('critic', 60, `结构审查: 发现 ${structureIssues.length} 个结构问题`, 'warning');
-        for (const iss of structureIssues.slice(0, 3)) {
-          logAndProgress('critic', 62, `  ⚠ ${iss.problem || '—'} → ${iss.solution || '—'}`, 'warning');
-          await cancellableSleep(200);
-        }
-      } else {
-        logAndProgress('critic', 60, '结构审查: 页面结构优秀，无需调整', 'success');
-      }
-      await cancellableSleep(300);
-
-      // Task 4: 高级感评分
-      const premiumScore = decision.score as Record<string, number> | undefined;
-      const totalScore = typeof decision.totalScore === 'number' ? decision.totalScore : undefined;
-      if (premiumScore) {
-        logAndProgress('critic', 72, `高级感评分: ${totalScore ?? '—'}/100`, (totalScore ?? 0) >= 80 ? 'success' : 'warning');
-        for (const [dim, val] of Object.entries(premiumScore)) {
-          logAndProgress('critic', 74, `  ${dim}: ${val}/20`);
-          await cancellableSleep(100);
-        }
-      }
-      await cancellableSleep(300);
-
-      // 设计决策汇总
-      const keep = decision.keep as string[] | undefined;
-      const remove = decision.remove as string[] | undefined;
-      const improve = decision.improve as string[] | undefined;
-      logAndProgress('critic', 85, `设计决策: 保留 ${keep?.length || 0} 项 / 移除 ${remove?.length || 0} 项 / 优化 ${improve?.length || 0} 项`, 'success');
-      const styleDecision = decision.style as { direction?: string; tone?: string } | undefined;
-      if (styleDecision) {
-        logAndProgress('critic', 88, `  方向: ${styleDecision.direction || '—'} | 调性: ${styleDecision.tone || '—'}`);
-      }
-
-      // 存储 DesignDecision 供 Planning/Code Agent 消费（归一化保证字段完整）
-      store.setTaskPartial({ designDecision: normalizeDesignDecision(decision) });
-      logAndProgress('critic', 95, '设计评审完成，决策已注入后续 Agent', 'success');
-
-    } catch (apiErr) {
-      const msg = apiErr instanceof Error ? apiErr.message : 'API error';
-      if (msg.includes('AbortError') || msg.includes('cancelled')) throw apiErr;
-      await failWorkflow('critic', `设计评审模型调用失败: ${msg}`);
-      return;
-    }
-
-    await cancellableSleep(300);
-    completeAgent('critic');
     track({ type: 'generation_stage', id: generationId, stage: 'planning', message: `${trackUser.name} 的任务进入 Planning 架构规划阶段` });
     await cancellableSleep(300);
 
@@ -770,7 +779,7 @@ async function runWorkflow() {
     // =====================================================================
     let enhancementPlan: EnhancementPlan | null = null;
     if (mode === 'enhancement') {
-      logAndProgress('critic', 100, '✨ Enhancement Agent: 正在制定设计升级方案（保留 80% DNA + 优化 20%）...', 'info');
+      logAndProgress('planning', 100, '✨ Enhancement Agent: 正在制定设计升级方案（保留 80% DNA + 优化 20%）...', 'info');
       await cancellableSleep(200);
 
       const enhAnalysis = useAgentStore.getState().task.designAnalysis;
@@ -792,21 +801,21 @@ async function runWorkflow() {
           designSystemSummary,
         }, generationId);
         enhancementPlan = normalizeEnhancementPlan(enhResult.result);
-        logAndProgress('critic', 100, `✓ 升级方案: 保留「${enhancementPlan.preserve.style}」, 优化 ${enhancementPlan.improve.length} 项`, 'success');
+        logAndProgress('planning', 100, `✓ 升级方案: 保留「${enhancementPlan.preserve.style}」, 优化 ${enhancementPlan.improve.length} 项`, 'success');
         for (const item of enhancementPlan.improve.slice(0, 3)) {
-          logAndProgress('critic', 100, `  [${item.category}] ${item.before} → ${item.after}`, 'info');
+          logAndProgress('planning', 100, `  [${item.category}] ${item.before} → ${item.after}`, 'info');
           await cancellableSleep(200);
         }
       } catch (enhErr) {
         const msg = enhErr instanceof Error ? enhErr.message : 'error';
         if (msg.includes('AbortError') || msg.includes('cancelled')) throw enhErr;
-        logAndProgress('critic', 100, `Enhancement Agent 不可用: ${msg}，使用默认升级方案`, 'warning');
+        logAndProgress('planning', 100, `Enhancement Agent 不可用: ${msg}，使用默认升级方案`, 'warning');
         enhancementPlan = mockEnhancementPlan;
       }
       store.setTaskPartial({ enhancementPlan });
       await cancellableSleep(300);
     } else {
-      logAndProgress('critic', 100, '🎯 精准复刻模式: 严格保持原设计，仅修复技术问题', 'info');
+      logAndProgress('planning', 100, '🎯 精准复刻模式: 严格保持原设计，仅修复技术问题', 'info');
       await cancellableSleep(300);
     }
 
@@ -944,7 +953,14 @@ async function runWorkflow() {
       styleName: styleMatch?.matchedStyle,
       mode,
       enhancementPlan: enhancementPlan ?? undefined,
+      // Phase 7：用户手动应用的优化方案（一次性消费）
+      optimizationIssues: pendingOptimizationIssues ?? undefined,
     };
+
+    if (pendingOptimizationIssues) {
+      logAndProgress('code', 5, '已注入手动优化方案，本轮生成将修复已知问题', 'warning');
+      pendingOptimizationIssues = null;
+    }
 
     logAndProgress('code', 6, 'Sending architecture plan + design tokens to AI...');
     await cancellableSleep(200);
@@ -1080,8 +1096,31 @@ async function runWorkflow() {
         componentSource = componentSource.substring(0, 30000) + '\n// ... (truncated)';
       }
 
+      // ---- Phase 6 — GSAP Animation Agent（独立节点）----
+      // 失败不阻断主流程：降级为 preview 步骤现有的 CSS 过渡动画。
+      let animationScript = '';
+      try {
+        logAndProgress('animation', 15, '正在分析原站动效并生成 GSAP 代码...');
+        const animResult = await callMimoAPI(
+          'animation',
+          url,
+          { structure: componentSource, mode },
+          generationId,
+        );
+        animationScript = extractAnimationScript(animResult.raw || '');
+        logAndProgress(
+          'animation',
+          100,
+          animationScript ? 'GSAP 动效已生成' : '未生成动效，沿用默认过渡',
+        );
+      } catch (animErr) {
+        console.warn('[Animation] skipped:', animErr instanceof Error ? animErr.message : animErr);
+        logAndProgress('animation', 100, '动效生成失败，已跳过（不影响页面生成）');
+      }
+
       const previewContext: Record<string, unknown> = {
         componentSource,
+        animationScript,
         designAnalysis: previewState.designAnalysis,
         designKnowledge: visionResult?.designKnowledge || undefined,
         styleContext: designSystem ? formatStyleContext(styleMatch, designSystem) : undefined,
@@ -1150,6 +1189,39 @@ async function runWorkflow() {
     logAndProgress('qa', 25, '📸 截图 mobile.png (375×812 移动端)', 'success');
     await cancellableSleep(200);
 
+    // =====================================================================
+    // 5.1 Reconstruction — 还原度度量（Sprint B，RECONSTRUCTION_DIFF 开关控制）
+    // =====================================================================
+    // fail-open：服务未开启 / 渲染降级 / 采集失败 → reconstructionScore = null，
+    // 绝不阻断 QA。null 的语义是「无法度量」，UI 应显示「—」而不是 0。
+    let reconstructionScore: ReconstructionScore | null = null;
+    let cloneScreenshot: string | undefined;
+    try {
+      logAndProgress('qa', 27, '正在渲染生成页并采集还原度证据...', 'info');
+      const res = await fetch('/api/reconstruction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html: previewHtml, url, originalScreenshot: websiteScreenshot }),
+        signal: workflowAbortController?.signal,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.enabled) {
+          reconstructionScore = (data.score ?? null) as ReconstructionScore | null;
+          if (typeof data.clone === 'string' && data.clone.length > 0) {
+            cloneScreenshot = data.clone;
+          }
+          if (reconstructionScore?.score != null) {
+            logAndProgress('qa', 28, `还原度采集完成：${reconstructionScore.score}/100`, 'success');
+          } else {
+            logAndProgress('qa', 28, `还原度无法度量（${reconstructionScore?.reason ?? 'unknown'}），跳过还原度对比`, 'warning');
+          }
+        }
+      }
+    } catch {
+      logAndProgress('qa', 28, '还原度服务不可用，继续标准视觉评审', 'warning');
+    }
+
     // ---- Visual Evaluation Agent: 六维视觉评分 ----
     logAndProgress('qa', 30, '正在连接 AI 视觉评审模型（Visual Evaluation Agent）...');
     await cancellableSleep(200);
@@ -1175,7 +1247,11 @@ async function runWorkflow() {
         designAnalysisSummary,
         designSystemSummary,
         round: 1,
-      }, generationId);
+        // Sprint B：有还原度报告时，QA 的主输入是「两张截图 + Diff 报告」
+        ...(reconstructionScore?.report
+          ? { diffReportJson: JSON.stringify(reconstructionScore.report) }
+          : {}),
+      }, generationId, websiteScreenshot, cloneScreenshot);
       logAndProgress('qa', 45, 'AI: 视觉评分已返回 (VisualScore.json)', 'success');
       await cancellableSleep(200);
 
@@ -1188,6 +1264,15 @@ async function runWorkflow() {
       logAndProgress('qa', 56, `  色彩 ${dims.color_score} | 字体 ${dims.typography_score} | 高级感 ${dims.premium_score}⭐`, 'info');
       await cancellableSleep(300);
       logAndProgress('qa', 60, `综合视觉评分: ${visualScore.overall_score}/100`, visualScore.overall_score >= 90 ? 'success' : 'warning');
+
+      // Sprint B：还原度与质量分是两个独立数字，必须分开报
+      const reconScore = reconstructionScore?.score;
+      logAndProgress(
+        'qa',
+        62,
+        `还原度评分: ${reconScore != null ? `${reconScore}/100` : '—（无法度量）'} ｜ 质量分 ${visualScore.overall_score} ≠ 还原度 ${reconScore ?? '—'}`,
+        reconScore != null && reconScore >= 80 ? 'success' : 'info',
+      );
 
       // 输出检测到的视觉问题
       if (visualScore.problems.length > 0) {
@@ -1214,23 +1299,19 @@ async function runWorkflow() {
     }));
     const visualFixes = visualScore.problems.map((p) => ({
       issue: `[${p.type}] ${p.description}`,
-      description: `将在优化轮次中修复（${DIMENSION_LABELS[`${p.type}_score` as keyof typeof DIMENSION_LABELS] || p.type}维度）`,
+      description: `建议修复方向（${DIMENSION_LABELS[`${p.type}_score` as keyof typeof DIMENSION_LABELS] || p.type}维度）`,
       applied: false,
     }));
 
-    logAndProgress('qa', 88, '视觉评审完成，正在判定是否触发自动优化...');
+    logAndProgress('qa', 88, '视觉评审完成', 'success');
     await cancellableSleep(200);
-
-    const optDecision = shouldOptimize(visualScore.scores, visualScore.overall_score);
-    if (optDecision.needsOptimization) {
-      logAndProgress('qa', 92, `⚠ 需要优化: ${optDecision.reasons.join('；')}`, 'warning');
-    } else {
-      logAndProgress('qa', 92, '✓ 视觉质量达标，无需优化', 'success');
-    }
 
     store.setTaskPartial({
       qaResult: {
+        // @deprecated 历史兼容字段（语义是质量分，不是相似度）—— 新代码用下面两个
         similarity: visualScore.overall_score,
+        qualityScore: visualScore.overall_score,
+        reconstructionScore,
         issues: visualIssues,
         fixes: visualFixes,
         screenshots: {
@@ -1250,216 +1331,6 @@ async function runWorkflow() {
     track({ type: 'generation_stage', id: generationId, stage: 'deploy', message: `${trackUser.name} 的任务进入导出打包阶段` });
     await cancellableSleep(300);
 
-    // =====================================================================
-    // Auto-Optimization Loop — 视觉评分驱动的自动优化闭环（最多 3 轮）
-    // Optimization Agent → Critic → Code → Visual QA（重新评分）
-    // 停止条件：overall_score >= 90 且各维度达标，或已达最大轮次
-    // =====================================================================
-    let optimizationRound = 1;
-    let currentVisualScore: VisualScore = useAgentStore.getState().task.qaResult?.visualScore ?? mockVisualScore;
-    let optCheck = shouldOptimize(currentVisualScore.scores, currentVisualScore.overall_score);
-
-    while (optCheck.needsOptimization && optimizationRound < MAX_OPTIMIZATION_ROUNDS) {
-      optimizationRound++;
-      const roundLabel = `第 ${optimizationRound - 1} 轮`;
-      logAndProgress('qa', 100, `⚡ 视觉评分 ${currentVisualScore.overall_score}/100 未达标（${optCheck.reasons.join('；')}），启动${roundLabel}自动优化闭环...`, 'warning');
-      track({ type: 'generation_stage', id: generationId, stage: 'code', message: `${roundLabel}视觉优化闭环` });
-      await cancellableSleep(200);
-
-      // ---- 闭环 Step 1: Optimization Agent 生成优化方案 (OptimizationPlan.json) ----
-      store.updateAgent('code', { status: 'running', progress: 5 });
-      logAndProgress('code', 5, `${roundLabel}优化: Optimization Agent 正在分析视觉问题并生成优化方案...`);
-      await cancellableSleep(200);
-
-      let optimizationPlanText = '';
-      try {
-        const planResult = await callMimoAPI('optimize', url, {
-          visualScoreJson: JSON.stringify({ scores: currentVisualScore.scores, problems: currentVisualScore.problems }),
-          round: optimizationRound - 1,
-        }, generationId);
-
-        const planData = planResult.result as Record<string, unknown>;
-        const planIssues = Array.isArray(planData.issues) ? planData.issues : [];
-        optimizationPlanText = planIssues
-          .map((iss: { problem?: string; solution?: string }) => `- 问题: ${iss.problem || '—'} → 方案: ${iss.solution || '—'}`)
-          .join('\n');
-
-        logAndProgress('code', 15, `${roundLabel}优化: 已生成 ${planIssues.length} 项优化方案 (OptimizationPlan.json)`, 'success');
-        for (let i = 0; i < Math.min(planIssues.length, 4); i++) {
-          const iss = planIssues[i] as { problem?: string; solution?: string };
-          logAndProgress('code', 18 + i * 2, `  ${iss.problem} → ${iss.solution}`, 'info');
-          await cancellableSleep(250);
-        }
-      } catch (planErr) {
-        const msg = planErr instanceof Error ? planErr.message : 'error';
-        if (msg.includes('AbortError') || msg.includes('cancelled')) throw planErr;
-        await failWorkflow('code', `${roundLabel}优化方案生成失败: ${msg}`);
-        return;
-      }
-
-      // ---- 闭环 Step 2: Critic 基于视觉反馈重新评审设计决策 ----
-      store.updateAgent('critic', { status: 'running', progress: 10 });
-      logAndProgress('critic', 10, `${roundLabel}优化: 正在根据视觉评分反馈重新评审设计决策...`);
-      await cancellableSleep(200);
-
-      let updatedDecision = useAgentStore.getState().task.designDecision;
-      try {
-        const criticRound = await callMimoAPI('critic', url, {
-          designAnalysis: useAgentStore.getState().task.designAnalysis,
-          designKnowledge: visionResult?.designKnowledge || undefined,
-          qaFeedback: {
-            visualScore: currentVisualScore.overall_score,
-            issues: currentVisualScore.problems.map((p) => `[${p.type}] ${p.description}`),
-          },
-          round: optimizationRound,
-        }, generationId, websiteScreenshot);
-
-        const roundDecision = criticRound.result as Record<string, unknown>;
-        if (roundDecision && typeof roundDecision === 'object' && !('raw' in roundDecision)) {
-          const merged = {
-            ...(updatedDecision as unknown as Record<string, unknown>),
-            ...roundDecision,
-            round: optimizationRound,
-          };
-          updatedDecision = normalizeDesignDecision(merged);
-          store.setTaskPartial({ designDecision: updatedDecision });
-          logAndProgress('critic', 80, `${roundLabel}评审完成: 设计决策已更新`, 'success');
-        } else {
-          logAndProgress('critic', 80, `${roundLabel}评审完成: 沿用现有决策`, 'info');
-        }
-      } catch (criticErr) {
-        const msg = criticErr instanceof Error ? criticErr.message : 'error';
-        if (msg.includes('AbortError') || msg.includes('cancelled')) throw criticErr;
-        await failWorkflow('critic', `${roundLabel}Critic 重评失败: ${msg}`);
-        return;
-      }
-      store.updateAgent('critic', { status: 'completed', progress: 100 });
-      await cancellableSleep(300);
-
-      // ---- 闭环 Step 3: Code 基于优化方案重新生成代码 ----
-      logAndProgress('code', 30, `${roundLabel}优化: 正在基于 OptimizationPlan 重新生成代码...`);
-      await cancellableSleep(200);
-
-      // 汇总 Code Validator 规则违规，一并交给 Code Agent 修复
-      const currentValidation = useAgentStore.getState().task.codeValidation;
-      const ruleViolationsText = currentValidation && currentValidation.violations.length > 0
-        ? `\n\n## 📐 Premium Design Rules 违规（必须修复）\n` +
-          currentValidation.violations.map((v) => `- [${v.ruleId}] ${v.message}`).join('\n')
-        : '';
-
-      try {
-        const optimizedCode = await callMimoAPI('code', url, {
-          designAnalysis: useAgentStore.getState().task.designAnalysis,
-          designDecision: updatedDecision,
-          componentTree: useAgentStore.getState().task.componentTree,
-          projectStructure: useAgentStore.getState().task.projectStructure,
-          prompt: prompt || undefined,
-          designKnowledge: visionResult?.designKnowledge || undefined,
-          styleContext: designSystem ? formatStyleContext(styleMatch, designSystem) : undefined,
-          styleName: styleMatch?.matchedStyle,
-          mode,
-          enhancementPlan: enhancementPlan ?? undefined,
-          optimizationIssues: `以下是视觉评审发现的问题与优化方案，请在本轮代码生成中逐项落实：\n${optimizationPlanText}${ruleViolationsText}`,
-        }, generationId, websiteScreenshot);
-
-        const rawCode = optimizedCode.raw || '';
-        const fileRegex = /---FILE:\s*(.+?)\s*---\n([\s\S]*?)---END---/g;
-        const optimizedMap = new Map<string, string>();
-        let fileMatch: RegExpExecArray | null;
-        while ((fileMatch = fileRegex.exec(rawCode)) !== null) {
-          optimizedMap.set(fileMatch[1].trim(), fileMatch[2].trim());
-        }
-
-        if (optimizedMap.size > 0) {
-          store.setTaskPartial({ generatedCode: optimizedMap });
-          logAndProgress('code', 80, `${roundLabel}优化: 重新生成 ${optimizedMap.size} 个文件`, 'success');
-          // 重新运行规则校验，更新违规数据
-          const revalidation = validateGeneratedCode(optimizedMap, styleMatch?.matchedStyle);
-          store.setTaskPartial({ codeValidation: revalidation });
-          logAndProgress('code', 85, `${roundLabel}优化: 规则校验更新（符合度 ${revalidation.score}/100，违规 ${revalidation.violations.length} 项）`, revalidation.passed ? 'success' : 'warning');
-        } else {
-          logAndProgress('code', 80, `${roundLabel}优化: 代码已优化`, 'success');
-        }
-      } catch (codeErr) {
-        const msg = codeErr instanceof Error ? codeErr.message : 'error';
-        if (msg.includes('AbortError') || msg.includes('cancelled')) throw codeErr;
-        await failWorkflow('code', `${roundLabel}代码重生成失败: ${msg}`);
-        return;
-      }
-      store.updateAgent('code', { status: 'completed', progress: 100 });
-      await cancellableSleep(300);
-
-      // ---- 闭环 Step 4: 重新编译代码 + 视觉评分 ----
-      store.updateAgent('qa', { status: 'running', progress: 10 });
-      logAndProgress('qa', 10, `${roundLabel}优化: 重新生成预览并进行视觉评分...`);
-      await cancellableSleep(200);
-
-      try {
-        const qaLoopState = useAgentStore.getState().task;
-        const genCodeForQA = qaLoopState.generatedCode;
-
-        // 使用 buildPreviewHtml 生成轻量级预览
-        let previewHtmlRound = '';
-        if (genCodeForQA instanceof Map && genCodeForQA.size > 0) {
-          previewHtmlRound = buildPreviewHtml(genCodeForQA);
-        }
-        if (!previewHtmlRound) {
-          previewHtmlRound = buildPreviewHtml(mockGeneratedCode);
-        }
-
-        // 存储预览 HTML
-        if (previewHtmlRound) {
-          store.setTaskPartial({ aiPreviewHtml: previewHtmlRound });
-        }
-
-        logAndProgress('qa', 30, `${roundLabel}优化: 预览生成完成，正在进行视觉评分...`, 'info');
-        await cancellableSleep(200);
-
-        const qaRound = await callMimoAPI('qa', url, {
-          previewHtml: previewHtmlRound,
-          designAnalysisSummary,
-          designSystemSummary,
-          round: optimizationRound,
-        }, generationId);
-
-        const newVisualScore = normalizeVisualScore(qaRound.result, optimizationRound);
-        const prevQaResult = useAgentStore.getState().task.qaResult;
-
-        store.setTaskPartial({
-          qaResult: {
-            ...prevQaResult!,
-            similarity: newVisualScore.overall_score,
-            visualScore: newVisualScore,
-            optimizationRounds: optimizationRound - 1,
-          },
-        });
-
-        currentVisualScore = newVisualScore;
-        logAndProgress('qa', 90, `${roundLabel}复检完成: 综合视觉分 ${newVisualScore.overall_score}/100（高级感 ${newVisualScore.scores.premium_score}⭐）`, newVisualScore.overall_score >= 90 ? 'success' : 'warning');
-      } catch (qaErr) {
-        const msg = qaErr instanceof Error ? qaErr.message : 'error';
-        if (msg.includes('AbortError') || msg.includes('cancelled')) throw qaErr;
-        await failWorkflow('qa', `${roundLabel}复检失败: ${msg}`);
-        return;
-      }
-      store.updateAgent('qa', { status: 'completed', progress: 100 });
-      await cancellableSleep(300);
-
-      // 重新判定是否继续优化
-      optCheck = shouldOptimize(currentVisualScore.scores, currentVisualScore.overall_score);
-    }
-
-    if (optimizationRound > 1) {
-      store.setTaskPartial({
-        qaResult: {
-          ...useAgentStore.getState().task.qaResult!,
-          optimizationRounds: optimizationRound - 1,
-        },
-      });
-      logAndProgress('qa', 100, `视觉优化闭环结束: 共执行 ${optimizationRound - 1} 轮，最终视觉分 ${currentVisualScore.overall_score}/100`, currentVisualScore.overall_score >= 90 ? 'success' : 'warning');
-    } else {
-      logAndProgress('qa', 100, `视觉质量一次达标，无需优化（${currentVisualScore.overall_score}/100）`, 'success');
-    }
 
     // =====================================================================
     // 6. Export Agent (信息导出)
@@ -1642,35 +1513,4 @@ function flattenFileNames(nodes: FileNodeLike[], prefix = ''): string[] {
     }
   }
   return result;
-}
-
-// ---------------------------------------------------------------------------
-// Design Critic fallback — heuristic decision when API is unavailable
-// ---------------------------------------------------------------------------
-
-/** 基于 Vision 分析结果启发式构造 DesignDecision（API 不可用时的降级方案） */
-function buildFallbackDecision(analysis: unknown): DesignDecision {
-  const a = (analysis && typeof analysis === 'object' ? analysis : {}) as Record<string, unknown>;
-  const styleName = (a.designStyle as string) || 'Modern Minimal';
-  const hierarchy = (a.visualHierarchy && typeof a.visualHierarchy === 'object'
-    ? a.visualHierarchy
-    : {}) as Record<string, string>;
-
-  return {
-    brandPosition: 'modern digital product',
-    userFeeling: ['trust', 'clarity', 'professional'],
-    designGoal: 'deliver a clear, premium visual experience',
-    visualHierarchy: [
-      { element: hierarchy.primary || 'hero section', score: 100 },
-      { element: hierarchy.secondary || 'core CTA', score: 75 },
-      { element: hierarchy.tertiary || 'supporting content', score: 40 },
-    ],
-    structureIssues: [],
-    score: { layout: 16, typography: 15, color: 16, image: 14, premium: 13 },
-    totalScore: 74,
-    keep: ['核心视觉结构', '品牌色彩体系', '主 Hero 区域'],
-    remove: ['冗余装饰元素', '过度阴影与边框'],
-    improve: ['间距节奏', '字体层级', '过渡动画'],
-    style: { direction: styleName, tone: 'premium' },
-  };
 }

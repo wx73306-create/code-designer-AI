@@ -37,3 +37,31 @@ deploy/deploy.zip
 # deploy build artifacts
 deploy/dist/
 deploy/*.zip
+
+# local debug artifacts (agent-browser screenshots, one-off probe scripts, backups)
+.review/
+_ui_shots/
+_home_shot.png
+_gen.js
+_probe.js
+_shot.js
+pipeline_proof.mjs
+repro_timeout.mjs
+*.bak
+*.bak.*
+
+# 真机验收产物（本地，不入版本库）
+.verify/
+.verify-sprint3/
+.build.log
+.verify-run*.log
+
+# 四道门禁日志（本地，不入版本库）
+.gate-*.log
+
+# 布局真值验收产物（本地，不入版本库）
+.verify-layout/
+.verify-*.log
+
+# 还原度验收产物（本地，不入版本库）
+.verify-reconstruction/

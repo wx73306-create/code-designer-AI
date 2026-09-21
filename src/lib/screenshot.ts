@@ -73,7 +73,8 @@ function findBrowserExecutable(): string {
 
 const BLOCKED_HOSTS = ['localhost', 'metadata.google.internal'];
 
-function isBlockedUrl(urlStr: string): boolean {
+/** Blocked-URL check, reused by the Browser Intelligence Layer (Phase 1). */
+export function isBlockedUrl(urlStr: string): boolean {
   try {
     const url = new URL(urlStr);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return true;
@@ -148,7 +149,13 @@ function setCachedScreenshot(url: string, fullPage: boolean, result: ScreenshotR
 }
 
 /** Get or create a shared browser instance */
-async function getBrowser(): Promise<Browser> {
+/**
+ * Get or create the shared browser instance.
+ *
+ * Exported for the Browser Intelligence Layer (Phase 1) so the whole app
+ * shares ONE browser process instead of launching a second one.
+ */
+export async function getBrowser(): Promise<Browser> {
   if (browserInstance?.connected) return browserInstance;
 
   const executablePath = findBrowserExecutable();

@@ -3,6 +3,7 @@
 // =============================================================================
 
 import type { CodeValidationResult } from '@/lib/code-rules/validator';
+import type { ReconstructionScore } from '@/types/reconstruction';
 
 // ---------------------------------------------------------------------------
 // Log Entry
@@ -24,9 +25,9 @@ export type AgentId =
   | 'browser'
   | 'vision'
   | 'stylematcher'
-  | 'critic'
   | 'planning'
   | 'code'
+  | 'animation'
   | 'qa'
   | 'deploy'
   | 'preview';
@@ -40,6 +41,8 @@ export interface Agent {
   logs: LogEntry[];
   startTime: number | null;
   endTime: number | null;
+  /** Live streaming text (token-by-token) pushed during a running stage's SSE stream. Cleared when the stage starts. */
+  streamingText?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,13 +138,66 @@ export interface VisualScore {
   round?: number;                       // 优化轮次
 }
 
-/** Optimization Agent 输出的优化方案 */
+/** 单条优化项（对应 SYSTEM_PROMPTS.optimize 的 optimizationPlan[]） */
+export interface OptimizationPlanItem {
+  priority: 'P0' | 'P1' | 'P2';
+  category: string;              // layout / component / typography / color / spacing ...
+  targetComponent: string;
+  problem: string;
+  reason: string;
+  before: string;
+  after: string;
+  expectedImpact: string;
+}
+
+/** 文件级改动指令（对应 codeInstructions[]） */
+export interface OptimizationCodeInstruction {
+  file: string;
+  action: 'modify' | 'replace' | 'remove';
+  changes: string[];
+}
+
+/** Optimization Agent 输出的优化方案（Phase 7：手动触发，绝不会自动生成） */
 export interface OptimizationPlan {
-  issues: Array<{ problem: string; solution: string }>;
+  diagnosis: {
+    rootCause: string;
+    affectedAreas: string[];
+    designDNAAtRisk: boolean;
+  };
+  items: OptimizationPlanItem[];
+  codeInstructions: OptimizationCodeInstruction[];
+  estimatedScoreIncrease: number;
+  decision: 'complete' | 'fix' | 'optimize';
+  confidence: number;
+  round: number;
 }
 
 export interface QAResult {
-  similarity: number; // 0-100 percentage
+  /**
+   * @deprecated 历史兼容字段，**语义是错的，请勿在新代码中使用**。
+   *
+   * 契约注释写的是「0-100 percentage（相似度）」，但实现上一直被赋成
+   * 六维质量分 `VisualScore.overall_score`（见 src/store/use-workflow.ts）。
+   * 也就是说：一个「好看但完全不像原站」的页面会在这里拿高分。
+   *
+   * 保留它是为了不炸历史消费方（qa-section.tsx 等），不删、不改赋值。
+   * 新代码请用 `qualityScore` / `reconstructionScore`。
+   */
+  similarity?: number;
+
+  /**
+   * 视觉质量分（0-100）：**这个网页设计得好吗？**
+   * 等于 `visualScore.overall_score`，只是给了它一个语义正确的名字。
+   */
+  qualityScore?: number;
+
+  /**
+   * 还原度（0-100）：**AI 做出来的像不像原网页？**
+   * 与质量分是两件事，不能互相替代。null = 无法度量（渲染降级 / 真值缺失）。
+   * 详见 src/types/reconstruction.ts 的三条硬约定。
+   */
+  reconstructionScore?: ReconstructionScore | null;
+
   issues: QAIssue[];
   fixes: QAFix[];
   screenshots: {
@@ -282,7 +338,6 @@ export type ActiveSection =
   | 'home'
   | 'analysis'
   | 'stylematcher'
-  | 'critic'
   | 'components'
   | 'code'
   | 'qa'
@@ -339,6 +394,8 @@ export interface Task {
   componentTree: ComponentNode | null;
   generatedCode: Map<string, string> | null;
   qaResult: QAResult | null;
+  /** 手动触发的优化方案（Optimization Agent 产出，绝不会自动生成） */
+  optimizationPlan: OptimizationPlan | null;
   deployResult: DeployResult | null;
   projectStructure: FileNode[] | null;
   startedAt: number | null;

@@ -1,8 +1,10 @@
 'use client';
 
 import { useMemo, useRef, useEffect } from 'react';
-import { Terminal, Globe, Eye, Palette, Sparkles, Brain, Code2, ShieldCheck, Rocket, MonitorPlay } from 'lucide-react';
+import { Terminal, Globe, Eye, Palette, Brain, Code2, Zap, ShieldCheck, Rocket, MonitorPlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import gsap from 'gsap';
+import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import { useAgentStore } from '@/store/agent-store';
 import { cn, formatTime } from '@/lib/utils';
 import type { AgentId, LogEntry } from '@/types/agent';
@@ -11,21 +13,23 @@ const AGENT_ICON: Record<AgentId, LucideIcon> = {
   browser: Globe,
   vision: Eye,
   stylematcher: Palette,
-  critic: Sparkles,
   planning: Brain,
   code: Code2,
+  animation: Zap,
   qa: ShieldCheck,
   deploy: Rocket,
   preview: MonitorPlay,
 };
 
+gsap.registerPlugin(ScrollToPlugin);
+
 const AGENT_COLOR: Record<AgentId, string> = {
   browser: '#0071E3',
   vision: '#AF52DE',
   stylematcher: '#FF6482',
-  critic: '#FFD60A',
   planning: '#FF9500',
   code: '#34C759',
+  animation: '#88CE02',
   qa: '#FF3B30',
   deploy: '#0A84FF',
   preview: '#30D158',
@@ -52,10 +56,14 @@ export function LogPanel() {
     return merged;
   }, [agents]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom (smooth via ScrollToPlugin, no hard scrollTop jump)
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      gsap.to(scrollRef.current, {
+        scrollTo: { y: 'max' },
+        duration: 0.4,
+        ease: 'power1.out',
+      });
     }
   }, [allLogs.length]);
 
@@ -67,7 +75,7 @@ export function LogPanel() {
         <span className="text-[11px] font-semibold text-black/40 uppercase tracking-wider">
           Activity Log
         </span>
-        <span className="ml-auto text-[10px] text-black/20 font-mono">
+        <span className="ml-auto text-[10px] text-black/30 font-mono">
           {allLogs.length} entries
         </span>
       </div>
@@ -76,7 +84,7 @@ export function LogPanel() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
         {allLogs.length === 0 && (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-black/20">等待日志...</p>
+            <p className="text-xs text-black/40">等待日志...</p>
           </div>
         )}
         {allLogs.map((log, i) => {
@@ -113,7 +121,7 @@ export function LogPanel() {
                   {log.entry.message}
                 </p>
               </div>
-              <span className="text-[9px] text-black/15 font-mono shrink-0 mt-0.5 tabular-nums">
+              <span className="text-[9px] text-black/30 font-mono shrink-0 mt-0.5 tabular-nums">
                 {formatTime(log.entry.timestamp)}
               </span>
             </div>

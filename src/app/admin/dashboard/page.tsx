@@ -93,7 +93,6 @@ const PIPELINE_STAGES = [
   { key: 'browser', label: 'Browser', icon: Globe, color: '#0071E3' },
   { key: 'vision', label: 'Vision', icon: Eye, color: '#AF52DE' },
   { key: 'stylematcher', label: 'Style', icon: Sparkles, color: '#FF6482' },
-  { key: 'critic', label: 'Critic', icon: Sparkles, color: '#FFD60A' },
   { key: 'planning', label: 'Planning', icon: Cpu, color: '#FF9500' },
   { key: 'code', label: 'Code', icon: Code2, color: '#34C759' },
   { key: 'qa', label: 'QA', icon: ShieldCheck, color: '#FF3B30' },
@@ -159,7 +158,7 @@ export default function DashboardPage() {
   const runningTasks = generations.filter((g) => g.status === 'running');
   const analyzingCount = runningTasks.filter((g) => ['browser', 'vision', 'stylematcher'].includes(g.currentStage)).length;
   const generatingCount = runningTasks.filter((g) => ['planning', 'code'].includes(g.currentStage)).length;
-  const optimizingCount = runningTasks.filter((g) => ['qa', 'optimize', 'critic'].includes(g.currentStage)).length;
+  const optimizingCount = runningTasks.filter((g) => ['qa', 'optimize'].includes(g.currentStage)).length;
   const failedCount = generations.filter((g) => g.status === 'error').length;
 
   return (

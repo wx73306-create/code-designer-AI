@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 归档死代码：已排除出 tsconfig，同样不参与 lint。
+    // 详见 src/legacy/agents/README.md —— 它不该再产生任何门禁噪音。
+    "src/legacy/**",
   ]),
 ]);
 

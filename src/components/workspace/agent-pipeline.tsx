@@ -1,22 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Globe, Eye, Palette, Sparkles, Brain, Code2, ShieldCheck, Rocket, Clock, Check, Loader2, Terminal, X, MonitorPlay } from 'lucide-react';
+import { Globe, Eye, Palette, Brain, Code2, Zap, ShieldCheck, Rocket, Clock, Check, Loader2, Terminal, X, MonitorPlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAgentStore } from '@/store/agent-store';
 import { cn, formatDuration } from '@/lib/utils';
-import type { AgentId } from '@/types/agent';
+import type { AgentId, ActiveSection } from '@/types/agent';
 
-const AGENT_ORDER: AgentId[] = ['browser', 'vision', 'stylematcher', 'critic', 'planning', 'code', 'preview', 'qa', 'deploy'];
+const AGENT_ORDER: AgentId[] = ['browser', 'vision', 'stylematcher', 'planning', 'code', 'animation', 'preview', 'qa', 'deploy'];
 
 const ICON_MAP: Record<AgentId, LucideIcon> = {
   browser: Globe,
   vision: Eye,
   stylematcher: Palette,
-  critic: Sparkles,
   planning: Brain,
   code: Code2,
+  animation: Zap,
   qa: ShieldCheck,
   deploy: Rocket,
   preview: MonitorPlay,
@@ -26,9 +26,9 @@ const AGENT_COLOR: Record<AgentId, string> = {
   browser: '#0071E3',
   vision: '#AF52DE',
   stylematcher: '#FF6482',
-  critic: '#FFD60A',
   planning: '#FF9500',
   code: '#34C759',
+  animation: '#88CE02',
   qa: '#FF3B30',
   deploy: '#0A84FF',
   preview: '#30D158',
@@ -38,28 +38,31 @@ const AGENT_LABEL: Record<AgentId, string> = {
   browser: '网页读取',
   vision: '视觉识别',
   stylematcher: '体系匹配',
-  critic: '设计评审',
   planning: '架构规划',
   code: '代码生成',
+  animation: '动效恢复',
   qa: '质量检测',
   deploy: '信息导出',
   preview: '实时预览',
 };
 
-const SECTION_MAP: Record<AgentId, string> = {
+const SECTION_MAP: Record<AgentId, ActiveSection> = {
   browser: 'analysis',
   vision: 'analysis',
   stylematcher: 'stylematcher',
-  critic: 'critic',
   planning: 'components',
   code: 'code',
+  animation: 'code',
   qa: 'qa',
   deploy: 'deploy',
   preview: 'preview',
 };
 
 function useNow(ms = 1000) {
-  const [now, setNow] = useState(Date.now());
+  // NOTE: must NOT use useSyncExternalStore with getSnapshot: () => Date.now() —
+  // an unstable snapshot violates React's contract (same value between store changes)
+  // and causes "Maximum update depth exceeded" infinite re-render loops under load.
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), ms);
     return () => clearInterval(id);
@@ -138,7 +141,7 @@ export function AgentPipeline() {
               />
 
               <button
-                onClick={() => setActiveSection(SECTION_MAP[id] as any)}
+                onClick={() => setActiveSection(SECTION_MAP[id])}
                 className={cn(
                   'relative flex items-start gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-all duration-200',
                   isActive
@@ -182,15 +185,14 @@ export function AgentPipeline() {
                     )}
                   </div>
 
-                  {/* Running pulse ring */}
+                  {/* Running pulse ring — transform-only (scale + opacity), no boxShadow paint */}
                   {isRunning && (
                     <motion.div
-                      className="absolute inset-0 rounded-[10px]"
+                      className="absolute inset-0 rounded-[10px] border"
+                      style={{ borderColor: hexToRgba(color, 0.25) }}
                       animate={{
-                        boxShadow: [
-                          `0 0 0 0px ${hexToRgba(color, 0.2)}`,
-                          `0 0 0 6px ${hexToRgba(color, 0)}`,
-                        ],
+                        scale: [1, 1.6],
+                        opacity: [0.6, 0],
                       }}
                       transition={{
                         duration: 1.5,
@@ -239,11 +241,21 @@ export function AgentPipeline() {
                   {isRunning && (
                     <div className="mt-1.5 h-[3px] rounded-full bg-black/[0.04] overflow-hidden">
                       <motion.div
-                        className="h-full rounded-full"
+                        className="h-full w-full rounded-full origin-left"
                         style={{ backgroundColor: color }}
-                        animate={{ width: `${agent.progress}%` }}
+                        animate={{ scaleX: agent.progress / 100 }}
                         transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
                       />
+                    </div>
+                  )}
+
+                  {/* Live token stream preview while running (SSE) */}
+                  {isRunning && agent.streamingText && agent.streamingText.length > 0 && (
+                    <div className="mt-1.5 max-h-[88px] overflow-hidden rounded-lg bg-black/[0.03] border border-black/[0.05] px-2 py-1.5">
+                      <p className="text-[10px] leading-[1.5] text-black/45 font-mono whitespace-pre-wrap break-words">
+                        {agent.streamingText}
+                        <span className="inline-block w-[2px] h-3 ml-0.5 align-middle bg-[#0071E3] animate-pulse" />
+                      </p>
                     </div>
                   )}
 
@@ -256,7 +268,7 @@ export function AgentPipeline() {
                       </span>
                     )}
                     {!elapsed && isIdle && (
-                      <span className="text-[10px] text-black/15">等待中</span>
+                      <span className="text-[10px] text-black/30">等待中</span>
                     )}
                   </div>
                 </div>

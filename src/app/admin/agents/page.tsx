@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Loader2, Globe, Eye, Palette, Sparkles, Brain, Code2, ShieldCheck, Download, Zap, MonitorPlay } from 'lucide-react';
+import { Bot, Loader2, Globe, Eye, Palette, Brain, Code2, ShieldCheck, Download, Zap, MonitorPlay } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { usePoll, formatNumber } from '../use-admin-poll';
 
@@ -24,7 +24,6 @@ const AGENT_META: Record<string, { name: string; icon: LucideIcon; color: string
   browser: { name: 'Browser Agent', icon: Globe, color: '#0071E3', desc: '网页读取 · DOM/CSS 抓取', deterministic: true },
   vision: { name: 'Vision Agent', icon: Eye, color: '#AF52DE', desc: '视觉识别 · 设计系统分析' },
   stylematcher: { name: 'Style Matcher', icon: Palette, color: '#FF6482', desc: '设计体系匹配 · 四维评分', deterministic: true },
-  critic: { name: 'Design Critic', icon: Sparkles, color: '#FFD60A', desc: '设计评审 · 决策输出' },
   planning: { name: 'Planning Agent', icon: Brain, color: '#FF9500', desc: '架构规划 · 组件树' },
   code: { name: 'Code Agent', icon: Code2, color: '#34C759', desc: '代码生成 · React 项目' },
   qa: { name: 'Visual QA', icon: ShieldCheck, color: '#FF3B30', desc: '视觉评分 · 六维评价' },

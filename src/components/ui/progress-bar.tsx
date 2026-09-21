@@ -82,19 +82,17 @@ export function ProgressBar({
         {/* Fill */}
         <motion.div
           className={cn(
-            "h-full rounded-full origin-left",
+            "h-full w-full rounded-full origin-left",
             colors.fill,
             isComplete && colors.glow
           )}
-          initial={{ width: "0%" }}
-          animate={{ width: `${clamped}%` }}
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: clamped / 100 }}
           transition={{
-            width: {
-              type: "spring",
-              stiffness: 120,
-              damping: 30,
-              mass: 0.8,
-            },
+            type: "spring",
+            stiffness: 120,
+            damping: 30,
+            mass: 0.8,
           }}
         />
 

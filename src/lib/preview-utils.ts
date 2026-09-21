@@ -600,7 +600,7 @@ export function postProcessHtml(html: string, content?: ExtractedContent): strin
   //     Also catches bare -colors without ] (e.g., hover:text-blue-colors)
   //     Note: lookahead uses $ (not ") because we're inside a captured class value
   result = result.replace(/class="([^"]*)"/g, (_match, classes: string) => {
-    let fixed = classes
+    const fixed = classes
       .replace(/(\S+\])-colors(?=\s|$)/g, '$1 transition-colors')
       .replace(/(\S+\])-all(?=\s|$)/g, '$1 transition-all')
       // Catch patterns like "hover:text-[#xxx]-colors" where ] is part of arbitrary value

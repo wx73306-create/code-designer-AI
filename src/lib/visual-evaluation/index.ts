@@ -22,3 +22,5 @@ export {
 } from './prompt';
 
 export { normalizeVisualScore } from './schema';
+
+export { normalizeOptimizationPlan, formatOptimizationIssues } from './plan';
