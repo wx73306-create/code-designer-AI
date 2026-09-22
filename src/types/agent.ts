@@ -214,6 +214,55 @@ export interface QAResult {
 }
 
 // ---------------------------------------------------------------------------
+// B.2 Quality / Reconstruction Metrics（契约冻结版，见 docs/B2-CONTRACT-DESIGN-FREEZE.md §3）
+//
+// B.2.1 只落地**类型**：新增接口、不接生产点、不接消费点、不改任何既有字段。
+// ---------------------------------------------------------------------------
+export interface QualityMetrics {
+  /**
+   * @deprecated 历史兼容字段，语义是「视觉质量分」，不是相似度。
+   * 保留、不删除、继续双写，直到 Migration Phase 4 停止生产。
+   *
+   * Producer: QA Agent（use-workflow.ts:1312）
+   * Source  : visualScore.overall_score
+   * Read    : 当 qualityScore 也存在时，一律以 qualityScore 为准（见下方读取优先级）
+   */
+  similarity?: number;
+
+  /**
+   * 视觉质量分（0-100）：这个网页设计得好吗
+   *
+   * Producer: QA Agent
+   * Source  : visualScore.overall_score（六维加权）
+   */
+  qualityScore?: number;
+
+  /**
+   * 还原度（0-100）：像不像目标网站
+   *
+   * Producer: Reconstruction Diff（use-workflow.ts:1195-1220 → /api/reconstruction）
+   * Source  : ReconstructionScore.score（9 维加权，types/reconstruction.ts:214）
+   * 缺失语义: undefined = 未开启 / 未产生；null = 有流程但结果不可得（降级 / 真值缺失）
+   *
+   * ⚠️ 已知缺口（B.2.2 接线前必须裁决，勿在 B.2.1 擅自改冻结类型）：
+   * 冻结契约把这里定为 `number`，但 §4 状态语义要求 null 可表达，
+   * 且生产侧 use-workflow.ts:1197 的产出是 `ReconstructionScore | null`，
+   * 严格模式下 null 赋给 number 会编译失败。待裁决：改为 `number | null`，
+   * 或由 reconstructionMeta.degradedReason 单独承载「不可得」。
+   */
+  reconstructionScore?: number;
+
+  reconstructionMeta?: {
+    /** 哪些页面区域参与了测量（role 序列，不是计数） */
+    measuredSections?: string[];
+    // TODO(B.2.x): 由 unknown 收敛为 DiffReport / 具名接口，避免 Export/Admin 侧类型逃逸
+    structuralDiff?: unknown;
+    visualDiff?: unknown;
+    degradedReason?: string;
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Deploy
 // ---------------------------------------------------------------------------
 export type DeployStatus = 'pending' | 'building' | 'deploying' | 'live' | 'failed';
