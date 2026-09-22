@@ -19,10 +19,22 @@ describe('QualityMetrics — B.2 contract', () => {
     expect(empty.reconstructionScore).toBeUndefined();
   });
 
-  it('三个分数字段的类型都是 number | undefined（不是 number）', () => {
+  it('similarity（历史字段）类型是 number | undefined', () => {
     expectTypeOf<QualityMetrics['similarity']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<QualityMetrics['qualityScore']>().toEqualTypeOf<number | undefined>();
-    expectTypeOf<QualityMetrics['reconstructionScore']>().toEqualTypeOf<number | undefined>();
+  });
+
+  it('两个新分数字段类型是 number | null | undefined（null 必须可表达）', () => {
+    expectTypeOf<QualityMetrics['qualityScore']>().toEqualTypeOf<number | null | undefined>();
+    expectTypeOf<QualityMetrics['reconstructionScore']>().toEqualTypeOf<number | null | undefined>();
+  });
+
+  it('四态语义：null = 有流程但不可得，必须与 undefined、0 三者可区分', () => {
+    const unavailable: QualityMetrics = { qualityScore: null, reconstructionScore: null };
+
+    expect(unavailable.qualityScore).toBeNull();
+    expect(unavailable.reconstructionScore).toBeNull();
+    expect(unavailable.qualityScore === undefined).toBe(false);
+    expect(unavailable.qualityScore === 0).toBe(false);
   });
 
   it('四态语义：undefined = 未产生，不能被当成 0', () => {

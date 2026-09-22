@@ -234,23 +234,25 @@ export interface QualityMetrics {
    *
    * Producer: QA Agent
    * Source  : visualScore.overall_score（六维加权）
+   * 缺失语义: undefined = 未产生；null = 有流程但结果不可得
+   *          （生产侧 qa-section.tsx:85 已按 number | null 消费）
    */
-  qualityScore?: number;
+  qualityScore?: number | null;
 
   /**
    * 还原度（0-100）：像不像目标网站
    *
-   * Producer: Reconstruction Diff（use-workflow.ts:1195-1220 → /api/reconstruction）
+   * Producer: Reconstruction Diff（src/store/use-workflow.ts → /api/reconstruction）
    * Source  : ReconstructionScore.score（9 维加权，types/reconstruction.ts:214）
    * 缺失语义: undefined = 未开启 / 未产生；null = 有流程但结果不可得（降级 / 真值缺失）
    *
-   * ⚠️ 已知缺口（B.2.2 接线前必须裁决，勿在 B.2.1 擅自改冻结类型）：
-   * 冻结契约把这里定为 `number`，但 §4 状态语义要求 null 可表达，
-   * 且生产侧 use-workflow.ts:1197 的产出是 `ReconstructionScore | null`，
-   * 严格模式下 null 赋给 number 会编译失败。待裁决：改为 `number | null`，
-   * 或由 reconstructionMeta.degradedReason 单独承载「不可得」。
+   * 裁决记录（2026-09-22，原冻结为 `number`）：
+   * §4 四态语义是硬不变量，null 必须可表达；且生产侧产出就是
+   * `ReconstructionScore | null`（QAResult.reconstructionScore 同为 `... | null`），
+   * 严格模式下 null 赋给 number 会编译失败。故收敛为 `number | null`；
+   * 「为什么不可得」另由 reconstructionMeta.degradedReason 承载（两者不重复表达同一件事）。
    */
-  reconstructionScore?: number;
+  reconstructionScore?: number | null;
 
   reconstructionMeta?: {
     /** 哪些页面区域参与了测量（role 序列，不是计数） */

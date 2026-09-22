@@ -97,16 +97,16 @@ interface QualityMetrics {
    * Producer: QA Agent
    * Source  : visualScore.overall_score（六维加权）
    */
-  qualityScore?: number;
+  qualityScore?: number | null;
 
   /**
    * 还原度（0-100）：像不像目标网站。
    *
-   * Producer: Reconstruction Diff（use-workflow.ts:1195-1220 → /api/reconstruction）
+   * Producer: Reconstruction Diff（src/store/use-workflow.ts → /api/reconstruction）
    * Source  : ReconstructionScore.score（9 维加权，types/reconstruction.ts:214）
    * 缺失语义: undefined = 未开启/未产生；null = 有流程但结果不可得（降级/真值缺失）
    */
-  reconstructionScore?: number;
+  reconstructionScore?: number | null;
 
   reconstructionMeta?: {
     /** 哪些页面区域参与了测量（role 序列，不是计数） */
@@ -129,8 +129,18 @@ qualityScore  >  similarity
 这条同样适用于 `reconstructionScore`：`null` 不等于 `undefined`，两者都不取 `0`。
 
 `reconstructionScore` 的完整对象形态沿用既有 `src/types/reconstruction.ts:214`
-（含 `score: number | null`、`reason`、`report`）；本契约里的 `reconstructionScore?: number`
+（含 `score: number | null`、`reason`、`report`）；本契约里的 `reconstructionScore?: number | null`
 是它在 `QAResult` 上的**投影值**，明细仍在 `reconstructionMeta` / 原对象中。
+
+> **契约修订记录（2026-09-22，B.2.1 实施时）**
+> 原冻结为 `qualityScore?: number` / `reconstructionScore?: number`，实施中发现与 §4 四态语义冲突：
+> `null`（有流程但不可得）无法表达，且生产侧 `qa-section.tsx:85` 已按 `number | null` 消费、
+> `QAResult.reconstructionScore` 本就是 `ReconstructionScore | null`，严格模式下 `null` 赋给 `number` 编译失败。
+> 故收敛为 `number | null`：
+> - `undefined` = 未产生 → 不展示
+> - `null` = 有流程但不可得 → `unavailable`
+> - `0` = 有效测量结果为零 → 显示 `0`
+> 「为什么不可得」仍由 `reconstructionMeta.degradedReason` 承载，两者不重复表达同一件事。
 
 ---
 
