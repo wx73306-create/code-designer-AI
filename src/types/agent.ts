@@ -198,6 +198,16 @@ export interface QAResult {
    */
   reconstructionScore?: ReconstructionScore | null;
 
+  /**
+   * 还原度明细（参与测量的区域 / 降级原因 / diff 引用）。
+   *
+   * 注意命名冲突已存在：**本对象形态** `reconstructionScore` 是**完整对象**
+   * （`ReconstructionScore | null`），而 `QualityMetrics.reconstructionScore` 是**投影值**
+   * （`number | null`）。二者同名不同义，靠 `toQualityMetrics()` 单向投影，
+   * 禁止互相赋值。
+   */
+  reconstructionMeta?: ReconstructionMeta;
+
   issues: QAIssue[];
   fixes: QAFix[];
   screenshots: {
@@ -254,14 +264,27 @@ export interface QualityMetrics {
    */
   reconstructionScore?: number | null;
 
-  reconstructionMeta?: {
-    /** 哪些页面区域参与了测量（role 序列，不是计数） */
-    measuredSections?: string[];
-    // TODO(B.2.x): 由 unknown 收敛为 DiffReport / 具名接口，避免 Export/Admin 侧类型逃逸
-    structuralDiff?: unknown;
-    visualDiff?: unknown;
-    degradedReason?: string;
-  };
+  reconstructionMeta?: ReconstructionMeta;
+}
+
+/**
+ * 还原度明细（B.2 契约，见 docs/B2-CONTRACT-DESIGN-FREEZE.md §3）。
+ *
+ * 只承载「解释性」信息：哪些区域参与了测量、降级原因、结构化 diff 引用。
+ * 分数本身在 QualityMetrics.reconstructionScore / QAResult.reconstructionScore。
+ */
+export interface ReconstructionMeta {
+  /**
+   * 哪些页面区域参与了测量 —— **role 序列，不是计数**。
+   * 只含与原站真值形成对比的区块（matched / missing）；
+   * extra（克隆页独有）没有可比对的真值，不进入「已测量」。
+   */
+  measuredSections?: string[];
+  // TODO(B.2.x): 由 unknown 收敛为 DiffReport / 具名接口，避免 Export/Admin 侧类型逃逸
+  structuralDiff?: unknown;
+  visualDiff?: unknown;
+  /** score 为 null 时的降级原因（渲染失败 / 真值缺失 / 采集异常） */
+  degradedReason?: string;
 }
 
 // ---------------------------------------------------------------------------

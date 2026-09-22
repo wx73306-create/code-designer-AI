@@ -29,6 +29,7 @@ import { buildPreviewHtml, postProcessHtml } from '@/lib/preview-utils';
 import { validateGeneratedCode } from '@/lib/code-rules';
 import { extractAnimationScript } from '@/lib/animation';
 import { normalizeEnhancementPlan, GENERATION_MODES } from '@/lib/design-mode';
+import { deriveReconstructionMeta } from '@/lib/reconstruction/quality-metrics';
 
 // ---------------------------------------------------------------------------
 // MiMo API Client (client-side)
@@ -1306,12 +1307,17 @@ async function runWorkflow() {
     logAndProgress('qa', 88, '视觉评审完成', 'success');
     await cancellableSleep(200);
 
+    // B.2.2：还原度明细（哪些区域参与测量 / 降级原因 / diff 引用）。
+    // 开关关闭或服务没产出对象时返回 undefined —— 字段**不产生**，而不是产出 {} 或 null。
+    const reconstructionMeta = deriveReconstructionMeta(reconstructionScore);
+
     store.setTaskPartial({
       qaResult: {
         // @deprecated 历史兼容字段（语义是质量分，不是相似度）—— 新代码用下面两个
         similarity: visualScore.overall_score,
         qualityScore: visualScore.overall_score,
         reconstructionScore,
+        ...(reconstructionMeta ? { reconstructionMeta } : {}),
         issues: visualIssues,
         fixes: visualFixes,
         screenshots: {

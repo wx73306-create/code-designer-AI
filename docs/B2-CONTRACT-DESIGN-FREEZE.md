@@ -210,6 +210,27 @@ score || 0        // ❌ 同理
 
 **禁止**：一次 rename、一次删除、硬迁移。
 
+**进度**
+
+| Phase | 状态 | 落地 |
+|---|---|---|
+| 1. Add（types + 类型测试） | ✅ | `406a903` + `acc6bd0`（`QualityMetrics` / `ReconstructionMeta`，9 条契约类型测试） |
+| 2. Dual write（generation result 链路） | ✅ | 见下 |
+
+**Phase 2 落地说明**
+
+- `similarity` 与 `qualityScore` 双写在 Sprint B.1 已完成（`use-workflow.ts` 写 QAResult 处两者同赋值）。
+- 本次补齐的是**还原度明细**：新增纯函数 `src/lib/reconstruction/quality-metrics.ts`
+  - `deriveReconstructionMeta(reconstructionScore)`：派生 `reconstructionMeta`。
+    开关关闭 / 服务没产出对象 → **返回 `undefined`，字段不产生**（不是 `{}`、不是 `null`）；
+    有对象但 `score === null` → 必带 `degradedReason`（`reason ?? renderStatus ?? 'unknown'`）；
+    全 `extra`（无真值可比对）时 `measuredSections` 不出现。
+  - `toQualityMetrics(qa)`：QAResult → QualityMetrics 单向投影，强制执行
+    读取优先级 `qualityScore > similarity`，且 `null` / `undefined` / `0` 三者互不塌缩。
+- `use-workflow.ts` 只多一行：把派生结果（仅在有值时）写进 QAResult。
+- **命名冲突已记录**：`QAResult.reconstructionScore` 是**完整对象**，
+  `QualityMetrics.reconstructionScore` 是**投影标量**；二者同名不同义，靠 `toQualityMetrics()` 单向转换，禁止互相赋值。
+
 **实现顺序**（每步 commit + push 后再继续）：
 
 ```
