@@ -29,7 +29,7 @@ import { buildPreviewHtml, postProcessHtml } from '@/lib/preview-utils';
 import { validateGeneratedCode } from '@/lib/code-rules';
 import { extractAnimationScript } from '@/lib/animation';
 import { normalizeEnhancementPlan, GENERATION_MODES } from '@/lib/design-mode';
-import { deriveReconstructionMeta, toQualityMetrics } from '@/lib/reconstruction/quality-metrics';
+import { deriveReconstructionMeta, reconstructionFields, toQualityMetrics } from '@/lib/reconstruction/quality-metrics';
 
 // ---------------------------------------------------------------------------
 // MiMo API Client (client-side)
@@ -1193,9 +1193,13 @@ async function runWorkflow() {
     // =====================================================================
     // 5.1 Reconstruction — 还原度度量（Sprint B，RECONSTRUCTION_DIFF 开关控制）
     // =====================================================================
-    // fail-open：服务未开启 / 渲染降级 / 采集失败 → reconstructionScore = null，
-    // 绝不阻断 QA。null 的语义是「无法度量」，UI 应显示「—」而不是 0。
+    // fail-open：绝不阻断 QA。
+    // 四态语义（B.2.3.1 修正）：
+    //   · 服务端未开启度量（enabled=false）→ **字段不产生**（undefined），不是 null
+    //   · 已开启但算不出来（渲染降级 / 真值缺失）→ null，由 degradedReason 说明原因
+    //   · 传输层失败 → 拿不到「是否开启」的证据，保守地不产生字段，不伪造 null
     let reconstructionScore: ReconstructionScore | null = null;
+    let reconstructionRan = false;
     let cloneScreenshot: string | undefined;
     try {
       logAndProgress('qa', 27, '正在渲染生成页并采集还原度证据...', 'info');
@@ -1208,6 +1212,8 @@ async function runWorkflow() {
       if (res.ok) {
         const data = await res.json();
         if (data?.enabled) {
+          // 服务端确认开启 → 从这里开始，「不可得」才是 null 而不是「未开启」
+          reconstructionRan = true;
           reconstructionScore = (data.score ?? null) as ReconstructionScore | null;
           if (typeof data.clone === 'string' && data.clone.length > 0) {
             cloneScreenshot = data.clone;
@@ -1316,7 +1322,9 @@ async function runWorkflow() {
         // @deprecated 历史兼容字段（语义是质量分，不是相似度）—— 新代码用下面两个
         similarity: visualScore.overall_score,
         qualityScore: visualScore.overall_score,
-        reconstructionScore,
+        // B.2.3.1：只有服务端确认开启了度量才产该字段；
+        // 开关关闭 → 字段不产生（undefined），绝不用 null 冒充「不可得」。
+        ...reconstructionFields(reconstructionRan, reconstructionScore),
         ...(reconstructionMeta ? { reconstructionMeta } : {}),
         issues: visualIssues,
         fixes: visualFixes,

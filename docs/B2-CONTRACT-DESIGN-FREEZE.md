@@ -239,6 +239,24 @@ score || 0        // ❌ 同理
 - 客户端发送端（`use-workflow.ts` `generation_complete` 埋点）改用 `toQualityMetrics()` 输出，
   `JSON.stringify` 会丢掉 `undefined` → 天然等价于「字段不产生」，而 `null` 会如实到达服务端。
 
+**B.2.3.1 落地说明（四态语义修正，2026-09-24）**
+
+- **问题**：生产端 `use-workflow.ts` **无条件**写入 `reconstructionScore: null`，于是「开关未开启」
+  在链路里被表达成 `null` —— 而 §3/§4 规定 `null` 专指「已尝试度量但不可得」。
+  后果不是理论问题：迁移观察把「未开启」记进 `unavailable`，而覆盖率口径又把 `null` 计入分子
+  → **会让人误判「还原度迁移已生效」**。
+- **修法**（只动结果映射，不碰 reconstruction 算法）：
+  - 新增纯函数 `reconstructionFields(ran, score)`（`src/lib/reconstruction/quality-metrics.ts`）：
+    `ran === false` → **不含该键**；`ran === true` + `null` → 保留 `null`；有效对象 → 原样保留。
+  - `use-workflow.ts` 只在**服务端确认 `enabled === true`** 时才置 `reconstructionRan = true`，
+    结果对象改成 `...reconstructionFields(reconstructionRan, reconstructionScore)`。
+  - 传输层失败（请求抛错 / 中断）拿不到「是否开启」的证据 → 保守地**不产生字段**，不伪造 `null`。
+- **勘察后确认本来就合规、无需改动**：`QAResult.reconstructionScore?: ReconstructionScore | null`（可选）、
+  `QualityMetrics.reconstructionScore?: number | null`（可选）、`toQualityMetrics` 的 `!== undefined` 判断、
+  `live-stats` 的 `if (data.x !== undefined)` 写入、`summarizeMigration` 的 `null → unavailable / 其余 → missing`。
+  **偏离只发生在生产端那一行无条件赋值。**
+- **测试**：`quality-metrics.test.ts` 新增 6 条，锁三态 + observe 分桶（missing vs unavailable）+ 覆盖率口径。
+
 **Phase 2 落地说明**
 
 - `similarity` 与 `qualityScore` 双写在 Sprint B.1 已完成（`use-workflow.ts` 写 QAResult 处两者同赋值）。

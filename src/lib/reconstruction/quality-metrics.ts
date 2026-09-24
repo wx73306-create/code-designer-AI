@@ -42,6 +42,29 @@ export function deriveReconstructionMeta(
 }
 
 /**
+ * B.2.3.1 — 把「还原度这次到底有没有产生」编码进结果字段（四态语义的最后一环）。
+ *
+ * 冻结契约 §2/§3 要求：**开关关闭时 `reconstructionScore` 根本不产生**（`undefined`），
+ * 而不是产出一个 `null` —— `null` 的语义专指「已尝试度量但不可得」。
+ * 修复前 `use-workflow.ts` 无条件写入 `reconstructionScore: null`，
+ * 于是「未开启」被读成「不可得」：迁移观察页把它记进 `unavailable`，
+ * 而覆盖率口径把 `null` 计入分子 → **会让人误判「还原度迁移已生效」**。
+ *
+ * - `ran === false`（服务端未开启度量）→ 不含该键
+ * - `ran === true` + `score === null`  → `null`（不可得，由 degradedReason 说明原因）
+ * - `ran === true` + 有效对象          → 原样保留（其 `score` 本身仍可能是 `null`）
+ *
+ * 传输层失败（请求抛错 / 中断）时拿不到「服务端是否开启」的证据，
+ * 因此**保守地不产生字段**，而不是伪造一个 `null` 状态。
+ */
+export function reconstructionFields(
+  ran: boolean,
+  score: ReconstructionScore | null,
+): { reconstructionScore?: ReconstructionScore | null } {
+  return ran ? { reconstructionScore: score } : {};
+}
+
+/**
  * QAResult → QualityMetrics 的**单向投影**（供 Export / Admin / UI 等新消费方使用）。
  *
  * 三条硬性规则（冻结契约 §3 读取优先级 + §4 状态语义）：
