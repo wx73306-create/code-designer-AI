@@ -599,7 +599,7 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <p className="text-[11px] text-white/35 mt-1 leading-relaxed max-w-md">
-                    一键开启或关闭全平台的网页生成功能。关闭后，前台「开始生成」按钮将被禁用，所有 AI 生成请求（/api/mimo、/api/workflow）会返回 503。
+                    一键开启或关闭全平台的网页生成功能。关闭后，前台「开始生成」按钮将被禁用，AI 生成请求（/api/mimo）会返回 503。
                   </p>
                 </div>
               </div>

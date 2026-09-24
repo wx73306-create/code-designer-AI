@@ -1,8 +1,29 @@
 import { NextRequest } from "next/server";
 import { liveStats } from "@/lib/live-stats";
 
+/**
+ * @deprecated 模拟流水线，**不是生产链路** —— B.2.3.3（2026-09-24）起默认退役。
+ *
+ * 本路由用硬编码数据「模拟」6 Agent 逆向工程流水线（见下方 mock 常量与
+ * `generateWorkflow()` 里的 setTimeout 延迟），**不调用任何模型、不抓取网页**。
+ * 真实链路是由前端编排的四个接口：
+ *
+ *   /api/screenshot → /api/mimo → /api/reconstruction → /api/track
+ *   （编排在 src/store/use-workflow.ts）
+ *
+ * 为什么保留而不是删除：`docs/execution-task-breakdown.md` 的 P1-19 曾计划复用它
+ * 做端到端演示，按「不突然删除」的处置原则先把路径留住。
+ *
+ * 当前行为：
+ *   POST /api/workflow           → 410 Gone + { deprecated, replacement, … }
+ *   POST /api/workflow?legacy=1  → 仍返回原模拟 SSE 流（仅供显式演示）
+ *
+ * ⚠️ 任何消费方都必须把 `?legacy=1` 的返回当作**模拟数据**，
+ * 不得当作真实分析结果展示（这正是 B.2.3.3 要消灭的那类错觉）。
+ */
+
 // =====================================================================
-// SSE Workflow API — Simulates the 6-agent reverse engineering pipeline
+// ↓↓↓ 以下为 legacy 模拟实现（默认不可达，仅 ?legacy=1 时启用）↓↓↓
 // =====================================================================
 
 interface WorkflowEvent {
@@ -555,6 +576,29 @@ async function* generateWorkflow(url: string): AsyncGenerator<string> {
 // =====================================================================
 
 export async function POST(request: NextRequest) {
+  // B.2.3.3：默认退役。模拟流水线只在显式 ?legacy=1 时可访问，
+  // 从根上消灭「假流水线看起来像真的」这种最危险的状态。
+  const isLegacy = request.nextUrl.searchParams.get("legacy") === "1";
+  if (!isLegacy) {
+    return new Response(
+      JSON.stringify({
+        deprecated: true,
+        replacement: "production workflow",
+        endpoints: [
+          "/api/screenshot",
+          "/api/mimo",
+          "/api/reconstruction",
+          "/api/track",
+        ],
+        message:
+          "本接口是模拟流水线（硬编码数据，不调用模型、不抓取网页），已退役；" +
+          "真实链路由前端编排上述接口完成。如需保留原模拟行为，请显式加 ?legacy=1。",
+      }),
+      { status: 410, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  // ---- 以下为 legacy 模拟实现，保持原行为不变 ----
   // 总控制开关：管理员暂停服务时拒绝所有生成请求
   if (!liveStats.generationEnabled) {
     return new Response(

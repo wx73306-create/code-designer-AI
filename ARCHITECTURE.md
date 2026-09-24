@@ -41,6 +41,15 @@ Vision     Planning   Code      Animation  QA
 Planning / Code 拿不到真实色值与间距，只能靠 Vision 的文字描述去猜。现在所有步骤共享
 同一份结构化数据，抓取结果另有 10 分钟 TTL 缓存（`getScraped()`）。
 
+> **已退役的模拟接口（B.2.3.3，2026-09-24）**
+>
+> `POST /api/workflow`（`src/app/api/workflow/route.ts`）是一条**模拟**流水线：用硬编码
+> 数据 + `setTimeout` 假装跑 6 个 Agent，**不调用模型、不抓取网页**，与上面这条真实链路无关。
+> 它默认返回 `410 Gone` + 弃用说明（`{ deprecated, replacement, endpoints }`）；
+> 仅当显式带 `?legacy=1` 时才返回旧的模拟 SSE 流（保留是给
+> `docs/execution-task-breakdown.md` P1-19 演示留的余量）。
+> **任何消费方都不得把它的输出当作真实分析结果。**
+
 ---
 
 ## 2. 两条产物路径（重要）

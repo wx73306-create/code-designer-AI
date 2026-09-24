@@ -9,7 +9,6 @@ import {
   mockGeneratedCode,
   mockQAIssues,
   mockQAFixes,
-  mockDeployResult,
   mockProjectStructure,
   mockVisualScore,
   mockCodeValidation,
@@ -1441,9 +1440,13 @@ async function runWorkflow() {
       await cancellableSleep(600 + Math.random() * 600);
     }
 
-    // Set deploy result
+    // B.2.3.3：这里原本写入 mockDeployResult —— 一个 status:'live' + `.invalid`
+    // 占位地址的**假部署结果**（mock-data.ts 里带 `demo: true`，但无任何消费方，
+    // 且没有任何 UI 读取 deployResult）。本项目只做「导出打包」，不做线上部署，
+    // 所以如实置空：没有发生的事不写进状态（与 B.2.3.1 四态语义同一原则）。
+    // 将来真接上部署能力时，再把真实结果写进来。
     store.setTaskPartial({
-      deployResult: mockDeployResult,
+      deployResult: null,
     });
 
     completeAgent('deploy');
