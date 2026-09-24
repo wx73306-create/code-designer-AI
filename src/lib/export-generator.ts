@@ -43,6 +43,52 @@ function formatReconstructionScore(qa: QAResult): string {
 }
 
 // =====================================================================
+// Sprint B.2.5 — 导出 reconstructionMeta
+//
+// 分数回答「多少分」，meta 回答「这分数是怎么来的」。只导出真实存在的部分：
+// 没有 measuredSections 就不写这一行，没有降级就不写原因 —— 导出物里同样不编造。
+// =====================================================================
+
+/** Markdown 明细行（已含列表缩进，与其所属的 `-` 项对齐）。 */
+export function reconstructionMetaLines(qa: QAResult): string[] {
+  const meta = qa.reconstructionMeta;
+  if (!meta) return [];
+
+  const lines: string[] = [];
+  const sections = meta.measuredSections;
+  if (sections && sections.length > 0) {
+    lines.push(`  - Measured Sections (${sections.length}): ${sections.join(', ')}`);
+  }
+  if (meta.degradedReason) {
+    lines.push(`  - Degraded Reason: ${meta.degradedReason}`);
+  }
+  return lines;
+}
+
+/** 新写进 HTML 的文本做最小转义，避免 role 名 / reason 里的 & < > 打断标签。 */
+export function escapeHtmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** HTML 报告里的还原度说明段落。 */
+export function reconstructionMetaHtml(qa: QAResult): string {
+  const meta = qa.reconstructionMeta;
+  if (!meta) return '';
+
+  const parts: string[] = [];
+  const sections = meta.measuredSections;
+  if (sections && sections.length > 0) {
+    parts.push(
+      `<p><strong>Measured sections (${sections.length}):</strong> ${escapeHtmlText(sections.join(', '))}</p>`,
+    );
+  }
+  if (meta.degradedReason) {
+    parts.push(`<p><strong>Degraded reason:</strong> ${escapeHtmlText(meta.degradedReason)}</p>`);
+  }
+  return parts.join('\n');
+}
+
+// =====================================================================
 // JSON Exports — Real design tokens from analysis
 // =====================================================================
 
@@ -483,6 +529,7 @@ export function generateAIPrompt(data: ExportData, target: 'cursor' | 'claude' |
     md += `## Quality Metrics\n\n`;
     md += `- Visual Quality Score: ${formatQualityScore(data.qaResult)}\n`;
     md += `- Reconstruction Fidelity: ${formatReconstructionScore(data.qaResult)}\n`;
+    for (const line of reconstructionMetaLines(data.qaResult)) md += `${line}\n`;
     if (data.qaResult.accessibilityScore !== undefined) md += `- Accessibility: ${data.qaResult.accessibilityScore}/100\n`;
     if (data.qaResult.performanceScore !== undefined) md += `- Performance: ${data.qaResult.performanceScore}/100\n`;
     if (data.qaResult.issues?.length) {
@@ -555,6 +602,7 @@ export function generateProjectSummary(data: ExportData): string {
     md += `## Quality Assessment\n\n`;
     md += `- Visual Quality Score: ${formatQualityScore(data.qaResult)}\n`;
     md += `- Reconstruction Fidelity: ${formatReconstructionScore(data.qaResult)}\n`;
+    for (const line of reconstructionMetaLines(data.qaResult)) md += `${line}\n`;
     md += `- Issues: ${data.qaResult.issues?.length || 0}\n`;
     md += `- Auto-fixes: ${data.qaResult.fixes?.length || 0}\n`;
     if (data.qaResult.accessibilityScore !== undefined) md += `- Accessibility score: ${data.qaResult.accessibilityScore}/100\n`;
@@ -958,6 +1006,7 @@ ${data.qaResult ? `
   ${data.qaResult.accessibilityScore !== undefined ? `<div class="stat-card"><div class="stat-value">${data.qaResult.accessibilityScore}</div><div class="stat-label">Accessibility</div></div>` : ''}
   ${data.qaResult.performanceScore !== undefined ? `<div class="stat-card"><div class="stat-value">${data.qaResult.performanceScore}</div><div class="stat-label">Performance</div></div>` : ''}
 </div>
+${reconstructionMetaHtml(data.qaResult)}
 ${data.qaResult.issues?.length ? `<h3>Issues (${data.qaResult.issues.length})</h3><table><thead><tr><th>Severity</th><th>Type</th><th>Description</th></tr></thead><tbody>${data.qaResult.issues.map(i => `<tr><td><span class="badge" style="background:${i.severity === 'critical' ? '#FFE5E5' : i.severity === 'major' ? '#FFF3E0' : '#F0F0F0'};color:${i.severity === 'critical' ? '#D32F2F' : i.severity === 'major' ? '#E65100' : '#666'}">${i.severity}</span></td><td>${i.type || 'visual'}</td><td>${i.description}</td></tr>`).join('')}</tbody></table>` : ''}
 ` : ''}
 
