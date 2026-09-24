@@ -10,6 +10,8 @@ import {
   recordGenerationEnd,
   recordGenerationStart,
 } from '@/lib/migration/generation-ledger';
+import { getRequestAuth } from '@/lib/admin-session';
+import { requiresAuthenticatedSession } from '@/lib/track-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,9 +25,22 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as TrackBody;
     const { type } = body;
 
+    // 生成生命周期事件必须来自已登录会话（理由见 src/lib/track-policy.ts）：
+    // 这类事件会写入持久化观察账本与后台看板，无鉴权时任何人都能伪造
+    // generation_complete 注入假样本，污染 Phase 4 的准入判断。
+    // 客户端用 sendBeacon / fetch 上报，两者对同源请求都会带上会话 Cookie，
+    // 所以这条闸门不会丢掉合法的账本数据；伪造请求直接 401。
+    const needsSession = requiresAuthenticatedSession(type);
+    const auth = getRequestAuth(request);
+    if (needsSession && !auth.authenticated) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // 这类事件的归属以**会话身份**为准，不允许用 body.email 把样本记到他人名下。
+    const sessionEmail = needsSession && auth.email ? auth.email : undefined;
+
     switch (type) {
       case 'generation_start': {
-        const email = String(body.email || 'anonymous');
+        const email = sessionEmail ?? String(body.email || 'anonymous');
         const startPayload = {
           id: body.id ? String(body.id) : undefined,
           user: String(body.user || '匿名用户'),
