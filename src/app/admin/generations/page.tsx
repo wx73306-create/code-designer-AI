@@ -1,10 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bot, Loader2, CheckCircle2, XCircle, RotateCcw, Globe } from 'lucide-react';
 import { usePoll, formatDuration, formatTimeAgo, formatNumber, truncateUrl } from '../use-admin-poll';
+import {
+  formatScoreView,
+  readQualityView,
+  readReconstructionView,
+  scoreToneClass,
+  type ScoreSource,
+} from '@/lib/score-display';
 
-interface Generation {
+interface Generation extends ScoreSource {
   id: string;
   user: string;
   email: string;
@@ -18,7 +25,6 @@ interface Generation {
   tokens?: number;
   cost?: number;
   files?: number;
-  similarity?: number;
   error?: string;
 }
 
@@ -47,6 +53,12 @@ const FILTERS = [
 export default function GenerationsPage() {
   const { data } = usePoll<GenerationsResponse>('/api/admin/stats?section=generations', 2500);
   const [filter, setFilter] = useState<string>('all');
+  // 耗时是相对「现在」算的，Date.now() 不能在 render 里直接调用（React 纯函数规则）
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const generations = data?.generations ?? [];
   const filtered = filter === 'all' ? generations : generations.filter((g) => g.status === filter);
@@ -170,7 +182,7 @@ export default function GenerationsPage() {
               <div>
                 <span className="text-white/30">耗时 </span>
                 <span className={g.status === 'running' ? 'text-blue-400' : 'text-white/60'}>
-                  {g.status === 'running' ? formatDuration(Date.now() - g.startedAt) : formatDuration(g.durationMs)}
+                  {g.status === 'running' ? formatDuration(now - g.startedAt) : formatDuration(g.durationMs)}
                 </span>
               </div>
               <div>
@@ -186,9 +198,15 @@ export default function GenerationsPage() {
                 <span className="text-white/60">{g.files ?? '—'}</span>
               </div>
               <div>
+                <span className="text-white/30">质量分 </span>
+                <span className={scoreToneClass(readQualityView(g))}>
+                  {formatScoreView(readQualityView(g))}
+                </span>
+              </div>
+              <div>
                 <span className="text-white/30">还原度 </span>
-                <span className={g.similarity && g.similarity >= 90 ? 'text-emerald-400' : 'text-white/60'}>
-                  {g.similarity ? `${g.similarity.toFixed(1)}%` : '—'}
+                <span className={scoreToneClass(readReconstructionView(g))}>
+                  {formatScoreView(readReconstructionView(g))}
                 </span>
               </div>
             </div>

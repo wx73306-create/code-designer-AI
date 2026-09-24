@@ -1,12 +1,18 @@
 'use client';
 
-import { Activity, Users, TrendingUp, Globe, Loader2, BarChart3 } from 'lucide-react';
+import { Activity, Users, TrendingUp, Globe, Loader2, BarChart3, Gauge } from 'lucide-react';
 import { usePoll, formatNumber, truncateUrl } from '../use-admin-poll';
+import {
+  averageMeasured,
+  readQualityView,
+  readReconstructionView,
+  type ScoreSource,
+} from '@/lib/score-display';
 
-interface Generation {
+interface Generation extends ScoreSource {
   id: string; user: string; url: string; goal: string;
   status: 'running' | 'completed' | 'error' | 'cancelled';
-  startedAt: number; similarity?: number;
+  startedAt: number;
 }
 interface UserRecord { name: string; email: string; lastActiveAt: number; generationCount: number; }
 
@@ -50,16 +56,20 @@ export default function AnalyticsPage() {
   }
   const topUrls = [...urlCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  // 平均还原度
-  const scored = generations.filter((g) => g.similarity);
-  const avgSimilarity = scored.length
-    ? scored.reduce((s, g) => s + (g.similarity || 0), 0) / scored.length
-    : 0;
+  // 平均质量分 / 平均还原度 —— 两个指标分开统计。
+  // 关键：缺失的记录不进分母，而不是当作 0 分拉低均值（`g.similarity || 0` 是明确禁止的写法）。
+  const qualityViews = generations.map(readQualityView);
+  const reconViews = generations.map(readReconstructionView);
+  const avgQuality = averageMeasured(qualityViews);
+  const avgReconstruction = averageMeasured(reconViews);
+  const qualityCount = qualityViews.filter((v) => v.kind === 'measured').length;
+  const reconCount = reconViews.filter((v) => v.kind === 'measured').length;
 
   const cards = [
     { label: '今日活跃用户', value: stats ? String(stats.todayLogins) : '—', icon: Activity, change: stats ? `${stats.onlineCount} 当前在线` : '' },
     { label: '累计用户', value: stats ? String(stats.totalUsers) : '—', icon: Users, change: stats ? `${formatNumber(stats.pageVisits)} 次页面访问` : '' },
-    { label: '平均还原度', value: scored.length ? `${avgSimilarity.toFixed(1)}%` : '—', icon: TrendingUp, change: `${scored.length} 个已评分任务` },
+    { label: '平均质量分', value: avgQuality === null ? '—' : `${avgQuality.toFixed(1)}%`, icon: TrendingUp, change: `${qualityCount} 个已评分` },
+    { label: '平均还原度', value: avgReconstruction === null ? '—' : `${avgReconstruction.toFixed(1)}%`, icon: Gauge, change: `${reconCount} 个已测量` },
     { label: '热门网站', value: topUrls[0] ? truncateUrl(topUrls[0][0], 14) : '—', icon: Globe, change: topUrls.length ? `Top ${topUrls.length} 站点` : '' },
   ];
 
@@ -85,7 +95,7 @@ export default function AnalyticsPage() {
 
       {stats && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {cards.map((c) => {
               const Icon = c.icon;
               return (

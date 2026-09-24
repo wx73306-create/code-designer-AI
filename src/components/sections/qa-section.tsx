@@ -88,6 +88,9 @@ export function QAContent() {
   const reconScore: number | null = qaResult?.reconstructionScore?.score ?? null;
   const reconUnavailable = !!qaResult && qaResult.reconstructionScore != null && reconScore === null;
   const reconTone = scoreTone(reconScore, reconUnavailable);
+  // B.2.4：reconstructionMeta 落地到界面 —— 让「哪些区域参与了测量」可见，
+  // 否则还原度分数是个没有解释的黑盒数字。
+  const measuredSectionCount = qaResult?.reconstructionMeta?.measuredSections?.length ?? 0;
   const issues = qaResult?.issues ?? mockQAIssues;
   const fixes = qaResult?.fixes ?? mockQAFixes;
   const fixedCount = fixes.filter((f) => f.applied).length;
@@ -381,7 +384,9 @@ export function QAContent() {
                 : '由 Reconstruction Diff 与原站真值对比得出'}
           </span>
           {isAI
-            ? <span className="text-[#0071E3] font-medium">Reconstruction Diff</span>
+            ? <span className="text-[#0071E3] font-medium">
+                {measuredSectionCount > 0 ? `已测量 ${measuredSectionCount} 个区块` : 'Reconstruction Diff'}
+              </span>
             : <span>未采集</span>}
         </div>
       </div>

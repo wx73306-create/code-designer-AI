@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { usePoll, formatDuration, formatNumber, formatClock } from '../../use-admin-poll';
 import {
@@ -7,10 +8,16 @@ import {
   Download, CheckCircle2, XCircle, Clock, Loader2, ChevronRight,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import {
+  formatScoreView,
+  readQualityView,
+  readReconstructionView,
+  type ScoreSource,
+} from '@/lib/score-display';
 
 // ---- Types ----
 
-interface Generation {
+interface Generation extends ScoreSource {
   id: string;
   user: string;
   email: string;
@@ -25,7 +32,6 @@ interface Generation {
   tokens?: number;
   cost?: number;
   files?: number;
-  similarity?: number;
   error?: string;
 }
 
@@ -81,6 +87,13 @@ export default function TaskDetailPage() {
 
   const { data: genData } = usePoll<GenerationsResponse>('/api/admin/stats?section=generations', 2500);
   const { data: apiData } = usePoll<ApiCallsResponse>('/api/admin/stats?section=api-calls', 3000);
+  // 耗时是相对「现在」算的，Date.now() 不能在 render 里直接调用（React 纯函数规则）。
+  // 必须早于下面的 early return —— hooks 不能有条件调用。
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const generation = genData?.generations.find((g) => g.id === taskId);
   const relatedCalls = (apiData?.calls ?? []).filter((c) => c.generationId === taskId);
@@ -124,12 +137,13 @@ export default function TaskDetailPage() {
       </div>
 
       {/* Task meta cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <MetaCard label="用户" value={generation.user} />
         <MetaCard label="模型" value={generation.model} />
-        <MetaCard label="耗时" value={generation.status === 'running' ? formatDuration(Date.now() - generation.startedAt) : formatDuration(generation.durationMs)} />
+        <MetaCard label="耗时" value={generation.status === 'running' ? formatDuration(now - generation.startedAt) : formatDuration(generation.durationMs)} />
         <MetaCard label="Token" value={formatNumber(generation.tokens || totalTokens)} />
-        <MetaCard label="还原度" value={generation.similarity ? `${generation.similarity.toFixed(1)}%` : '—'} />
+        <MetaCard label="质量分" value={formatScoreView(readQualityView(generation))} />
+        <MetaCard label="还原度" value={formatScoreView(readReconstructionView(generation))} />
       </div>
 
       {/* ─── Pipeline Debug View ─── */}
@@ -254,7 +268,7 @@ export default function TaskDetailPage() {
             <TimelineItem
               time={generation.completedAt}
               label={generation.status === 'completed' ? '生成完成' : generation.status === 'error' ? '生成失败' : '任务取消'}
-              desc={generation.status === 'completed' ? `还原度 ${generation.similarity?.toFixed(1) ?? '—'}% · ${formatNumber(generation.tokens)} tokens` : generation.error || ''}
+              desc={generation.status === 'completed' ? `质量分 ${formatScoreView(readQualityView(generation))} · 还原度 ${formatScoreView(readReconstructionView(generation))} · ${formatNumber(generation.tokens)} tokens` : generation.error || ''}
               isError={generation.status === 'error'}
               isSuccess={generation.status === 'completed'}
             />

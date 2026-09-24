@@ -2,8 +2,15 @@
 
 import { FolderOpen, Loader2, Globe, CheckCircle2, Clock } from 'lucide-react';
 import { usePoll, formatTimeAgo, truncateUrl } from '../use-admin-poll';
+import {
+  formatScoreView,
+  readQualityView,
+  readReconstructionView,
+  scoreToneClass,
+  type ScoreSource,
+} from '@/lib/score-display';
 
-interface Generation {
+interface Generation extends ScoreSource {
   id: string;
   user: string;
   url: string;
@@ -13,7 +20,6 @@ interface Generation {
   startedAt: number;
   durationMs?: number;
   files?: number;
-  similarity?: number;
 }
 
 interface GenerationsResponse {
@@ -95,16 +101,25 @@ export default function ProjectsPage() {
               )}
             </div>
 
-            {/* Footer */}
-            <div className="mt-4 flex items-center justify-between text-[11px] text-white/30">
-              <span>{p.user} · {formatTimeAgo(p.startedAt)}</span>
-              {p.similarity ? (
-                <span className={`tabular-nums ${p.similarity >= 90 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  还原度 {p.similarity.toFixed(1)}%
+            {/* Footer — 质量分与还原度分开显示，缺失的那一项不出现 */}
+            <div className="mt-4 flex items-center justify-between gap-3 text-[11px] text-white/30">
+              <span className="truncate">{p.user} · {formatTimeAgo(p.startedAt)}</span>
+              {p.status === 'running' ? (
+                <span className="text-blue-400 shrink-0">生成中…</span>
+              ) : (
+                <span className="flex items-center gap-2.5 shrink-0">
+                  {([
+                    { label: '质量分', view: readQualityView(p) },
+                    { label: '还原度', view: readReconstructionView(p) },
+                  ] as const)
+                    .filter((s) => s.view.kind !== 'missing')
+                    .map((s) => (
+                      <span key={s.label} className={`tabular-nums ${scoreToneClass(s.view)}`}>
+                        {s.label} {formatScoreView(s.view)}
+                      </span>
+                    ))}
                 </span>
-              ) : p.status === 'running' ? (
-                <span className="text-blue-400">生成中…</span>
-              ) : null}
+              )}
             </div>
           </div>
         ))}
