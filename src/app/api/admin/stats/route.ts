@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { liveStats } from '@/lib/live-stats';
 import { isAdminAuthenticatedServer } from '@/lib/admin-session';
 import { summarizeMigration } from '@/lib/migration/observe';
+import { loadCompletedScoreSources } from '@/lib/migration/generation-ledger';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,12 +56,17 @@ export async function GET(request: NextRequest) {
     // Migration Phase 3 · Observe —— 只统计已完成的任务。
     // running / error 的记录本来就不会有分数，计入分母只会稀释覆盖率，
     // 让「迁移是否生效」看起来比实际更差。
-    case 'migration':
+    //
+    // 2026-09-24（B.2.4 后）：样本改从**持久化账本**读，不再读内存 liveStats。
+    // 原因：liveStats 每次容器重启/重新部署即清零 → 观察期永远攒不够样本，
+    // Phase 4 的准入闸门（MIN_READINESS_SAMPLES）永远不会开口。
+    case 'migration': {
+      const records = await loadCompletedScoreSources();
       return NextResponse.json({
-        migration: summarizeMigration(
-          liveStats.generations.filter((g) => g.status === 'completed'),
-        ),
+        migration: summarizeMigration(records),
+        source: 'ledger',
       });
+    }
 
     case 'quota':
       return NextResponse.json(liveStats.getQuotaOverview());

@@ -5,6 +5,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { liveStats } from '@/lib/live-stats';
 import { pickReconstructionMeta, pickScore } from '@/lib/api/quality-payload';
+import {
+  recordGenerationComplete,
+  recordGenerationEnd,
+  recordGenerationStart,
+} from '@/lib/migration/generation-ledger';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,14 +26,18 @@ export async function POST(request: NextRequest) {
     switch (type) {
       case 'generation_start': {
         const email = String(body.email || 'anonymous');
-        const id = liveStats.generationStart({
+        const startPayload = {
           id: body.id ? String(body.id) : undefined,
           user: String(body.user || '匿名用户'),
           email,
           url: String(body.url || ''),
           goal: String(body.goal || ''),
           model: String(body.model || 'mimo-v2.5'),
-        });
+        };
+        const id = liveStats.generationStart(startPayload);
+        // 写入持久化账本（Phase 3 观察期要跨重启累积样本，内存态做不到）。
+        // 该函数内部自兜异常，不会影响埋点响应，故不 await。
+        void recordGenerationStart({ ...startPayload, id });
         // ⚠️ 这里**不再**扣配额（2026-09-24 修复）。
         //
         // 配额唯一入口是带鉴权的 `POST /api/quota`（由 use-workflow 在生成开始时调用）。
@@ -52,11 +61,31 @@ export async function POST(request: NextRequest) {
         const reconstructionScore = pickScore(body.reconstructionScore);
         const reconstructionMeta = pickReconstructionMeta(body.reconstructionMeta);
 
-        liveStats.generationComplete(String(body.id || ''), {
+        const completeId = String(body.id || '');
+        liveStats.generationComplete(completeId, {
           tokens: typeof body.tokens === 'number' ? body.tokens : undefined,
           files: typeof body.files === 'number' ? body.files : undefined,
           similarity: typeof body.similarity === 'number' ? body.similarity : undefined,
           // 只有真正上报了才写键：老客户端上报时新字段保持 absent（不是 null）。
+          ...(qualityScore !== undefined ? { qualityScore } : {}),
+          ...(reconstructionScore !== undefined ? { reconstructionScore } : {}),
+          ...(reconstructionMeta !== undefined ? { reconstructionMeta } : {}),
+        });
+
+        // 持久化账本：四态标记由 ledger 内部按「是否上报过」推断
+        // （undefined → 未产生；显式 null → 已尝试但不可得）。
+        const liveRecord = liveStats.generations.find((g) => g.id === completeId);
+        void recordGenerationComplete({
+          id: completeId,
+          url: liveRecord?.url,
+          user: liveRecord?.user,
+          email: liveRecord?.email,
+          goal: liveRecord?.goal,
+          model: liveRecord?.model,
+          files: liveRecord?.files,
+          tokens: liveRecord?.tokens,
+          durationMs: liveRecord?.durationMs,
+          similarity: liveRecord?.similarity,
           ...(qualityScore !== undefined ? { qualityScore } : {}),
           ...(reconstructionScore !== undefined ? { reconstructionScore } : {}),
           ...(reconstructionMeta !== undefined ? { reconstructionMeta } : {}),
@@ -66,10 +95,12 @@ export async function POST(request: NextRequest) {
 
       case 'generation_error':
         liveStats.generationError(String(body.id || ''), String(body.error || 'Unknown error'));
+        void recordGenerationEnd(String(body.id || ''), 'error', String(body.error || 'Unknown error'));
         return NextResponse.json({ ok: true });
 
       case 'generation_cancelled':
         liveStats.generationCancelled(String(body.id || ''));
+        void recordGenerationEnd(String(body.id || ''), 'cancelled');
         return NextResponse.json({ ok: true });
 
       case 'generation_quality': {

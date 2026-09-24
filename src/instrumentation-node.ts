@@ -26,7 +26,14 @@ export async function register() {
       try {
         // Try to count rows — will throw if table doesn't exist
         const delegate = models[table.charAt(0).toLowerCase() + table.slice(1)];
-        await delegate?.count?.();
+        // 「模型不在 Prisma 客户端里」（= schema 缺这个 model）同样要算缺 ——
+        // 原先的 `delegate?.count?.()` 用可选链把这种情况静默吞掉了：
+        // 于是 schema 里根本没有 Generation 模型，自检也一直报 "All tables present"，
+        // 自动 db push 从不触发（2026-09-24 修复）。
+        if (!delegate?.count) {
+          throw new Error(`prisma client 缺少模型 ${table}`);
+        }
+        await delegate.count();
       } catch {
         missing.push(table);
       }

@@ -441,3 +441,56 @@ model DesignMemory {
   @@index([createdAt])
   @@map("design_memories")
 }
+
+// ============================================================================
+// Generation — 生成记录（持久化观察账本）
+//
+// 为什么必须是持久化的：`liveStats` 是纯内存的，容器一重启/重新部署就清零；
+// 而 B.2 契约 §6 的 Phase 3（Observe）要求「积累样本后再决定是否停用 similarity」
+// ——样本必须活过重启，否则观察期永远攒不够，Phase 4 的准入闸门也不会开口。
+// （src/instrumentation-node.ts 的启动自检清单里本来就有 `Generation`，
+//  说明这是原设计意图，只是 schema 一直没补上这个模型。）
+//
+// 四态语义（契约 §4）在关系型列里会天然塌缩：SQL 的 NULL 无法区分
+// 「字段未产生(undefined)」与「已尝试但不可得(null)」。所以显式加 `*Produced`
+// 布尔位来表达「这次到底有没有产生该字段」：
+//   produced=false              → 未产生（等价 undefined，观察口径记 missing）
+//   produced=true + score=null  → 已尝试但不可得（记 unavailable）
+//   produced=true + score=数值  → 有效测量（含 0，记 measured）
+// ============================================================================
+
+model Generation {
+  id                            String    @id @default(cuid())
+  /// 前后端使用的生成 id（gen_xxx）；同一生成的多次上报按它 upsert
+  externalId                    String    @unique
+  user                          String?
+  email                         String?
+  url                           String
+  goal                          String?
+  model                         String?
+  /// running | completed | error | cancelled
+  status                        String    @default("running")
+  currentStage                  String?
+  files                         Int?
+  tokens                        Int?
+  durationMs                    Int?
+
+  /// @deprecated 历史兼容字段：语义是**质量分**，不是相似度（契约 §1）
+  similarity                    Float?
+  qualityScore                  Float?
+  qualityScoreProduced          Boolean   @default(false)
+  reconstructionScore           Float?
+  reconstructionScoreProduced   Boolean   @default(false)
+  reconstructionMeta            Json?
+
+  error                         String?
+  startedAt                     DateTime
+  completedAt                   DateTime?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  @@index([status, completedAt])
+  @@index([email])
+  @@index([startedAt])
+  @@map("generations")
+}
