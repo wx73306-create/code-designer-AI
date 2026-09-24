@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence, useInView, useMotionValue, useSpring, useTransform } from "framer-motion";
 import gsap from "gsap";
@@ -17,6 +17,12 @@ import {
 } from "lucide-react";
 import { useAgentStore } from "@/store/agent-store";
 import { isForcedDemoMode, resolveRunMode, runModeBadge } from "@/lib/run-mode";
+import {
+  getStoredUserServerSnapshot,
+  getStoredUserSnapshot,
+  subscribeStoredUser,
+  writeStoredUser,
+} from "@/lib/client-user-store";
 import { useWorkflow, cancelWorkflow } from "@/store/use-workflow";
 import { useModelSettings } from "@/store/model-settings";
 import { WorkspaceLayout } from "@/components/workspace/workspace-layout";
@@ -744,6 +750,45 @@ function ShowcaseCard({ item, index, isActive, onSelect, className }: {
 // ====================================================================
 
 // ====================================================================
+// 纯 DOM 工具（模块作用域）
+// ====================================================================
+
+/**
+ * Custom rAF smooth scroll — pauses heavy animations during scroll to prevent jank.
+ *
+ * 刻意放在模块作用域而非组件内：它不依赖任何组件状态，若定义在 render 作用域，
+ * `performance.now()` 会被 react-hooks/purity 判为「render 期调用 impure 函数」。
+ * 行为与原先完全一致（原实现只是被搬了个位置）。
+ */
+function smoothScrollTo(container: HTMLElement, targetTop: number, duration: number) {
+  // Add scrolling class to disable animations/compositing during scroll
+  container.classList.add('is-scrolling');
+
+  const startTop = container.scrollTop;
+  const distance = targetTop - startTop;
+  const startTime = performance.now();
+
+  function step(currentTime: number) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease-out cubic for natural deceleration
+    const eased = 1 - Math.pow(1 - progress, 3);
+    container.scrollTop = startTop + distance * eased;
+
+    if (progress < 1) {
+      requestAnimationFrame(step);
+    } else {
+      // Scroll complete — remove class to re-enable animations
+      requestAnimationFrame(() => {
+        container.classList.remove('is-scrolling');
+      });
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+
+// ====================================================================
 // Page
 // ====================================================================
 
@@ -786,8 +831,15 @@ export default function HomePage() {
   const [showcaseFilter, setShowcaseFilter] = useState<string>("全部");
   const [showcaseFeatured, setShowcaseFeatured] = useState(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userInfo, setUserInfo] = useState<{ name: string; email: string; avatar: string } | null>(null);
+  // 登录态改为订阅 sessionStorage（见 src/lib/client-user-store.ts）：
+  // 既可被 React 正确订阅，又能在水合阶段与 SSR 输出保持一致，
+  // 且不需要「在 effect 里同步 setState」那种会触发级联渲染的写法。
+  const userInfo = useSyncExternalStore(
+    subscribeStoredUser,
+    getStoredUserSnapshot,
+    getStoredUserServerSnapshot,
+  );
+  const isLoggedIn = userInfo !== null;
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [activeModal, setActiveModal] = useState<'profile' | 'preferences' | 'account' | null>(null);
   const [projectHistory, setProjectHistory] = useState<Array<{ id: string; url: string; date: string; status: string }>>([]);
@@ -798,7 +850,10 @@ export default function HomePage() {
   const firstEnabledProvider = modelProviders.find((p) => p.enabled) ?? modelProviders[0];
   const [selectedProvider, setSelectedProvider] = useState(firstEnabledProvider?.id ?? "");
   const activeProvider = modelProviders.find((p) => p.id === selectedProvider) ?? firstEnabledProvider;
-  const [quota, setQuota] = useState<{ used: number; limit: number; remaining: number; allowed: boolean } | null>(null);
+  const [quotaState, setQuota] = useState<{ used: number; limit: number; remaining: number; allowed: boolean } | null>(null);
+  // 配额只对已登录用户有意义。用**派生**表达「登出即无配额」，而不是在 effect 里
+  // 同步 setQuota(null)（那样会触发 react-hooks/set-state-in-effect 的级联渲染告警）。
+  const quota = userInfo?.email ? quotaState : null;
   const SHOWCASE_CATEGORIES = ["全部", "AI 协作", "影视娱乐", "科技", "教育", "旅行冒险", "建筑作品集"];
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -807,34 +862,21 @@ export default function HomePage() {
   const showcaseParticles = useGlassParticles(20);
   const sectionParticles = useGlassParticles(12);
 
-  // ---- 实时埋点：页面访问 + 登录态恢复 + 心跳 ----
+  // ---- 实时埋点：页面访问 + 会话有效性校验 + 心跳 ----
   useEffect(() => {
     track({ type: "page_visit", path: "/" });
-    try {
-      const raw = sessionStorage.getItem("cd_user");
-      if (raw) {
-        const u = JSON.parse(raw) as { name: string; email: string };
-        // 先乐观恢复前端状态
-        setIsLoggedIn(true);
-        setUserInfo({ name: u.name, email: u.email, avatar: u.name.charAt(0).toUpperCase() });
-        // 再向服务端验证 session cookie 是否仍有效
-        fetch("/api/user/me", { credentials: "include" })
-          .then((r) => {
-            if (!r.ok) {
-              // Cookie 过期或无效，清除登录态
-              setIsLoggedIn(false);
-              setUserInfo(null);
-              sessionStorage.removeItem("cd_user");
-            }
-          })
-          .catch(() => {});
-      }
-    } catch { /* ignore */ }
+    // 登录态的恢复已交给 client-user-store（水合后自动生效，无需 effect 内 setState）。
+    // 这里只做一件事：服务端会话 cookie 若已失效，就清掉本地登录态。
+    if (getStoredUserSnapshot()) {
+      fetch("/api/user/me", { credentials: "include" })
+        .then((r) => {
+          if (!r.ok) writeStoredUser(null);
+        })
+        .catch(() => {});
+    }
     const heartbeat = setInterval(() => {
-      try {
-        const raw = sessionStorage.getItem("cd_user");
-        if (raw) track({ type: "heartbeat", email: (JSON.parse(raw) as { email: string }).email });
-      } catch { /* ignore */ }
+      const stored = getStoredUserSnapshot();
+      if (stored) track({ type: "heartbeat", email: stored.email });
     }, 60000);
     return () => clearInterval(heartbeat);
   }, []);
@@ -855,10 +897,13 @@ export default function HomePage() {
 
   // ---- 轮询当前用户生成配额（与后台配额设置实时联动） ----
   useEffect(() => {
-    if (!userInfo?.email) { setQuota(null); return; }
+    // 未登录：没有可轮询的对象，直接不订阅。「登出即不展示配额」由上面的
+    // `quota` 派生表达，这里不做同步 setState。
+    const email = userInfo?.email;
+    if (!email) return;
     let alive = true;
     const load = () => {
-      fetch(`/api/quota-status?email=${encodeURIComponent(userInfo.email)}`, { cache: "no-store" })
+      fetch(`/api/quota-status?email=${encodeURIComponent(email)}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
           if (alive && typeof d.used === "number") {
@@ -914,7 +959,7 @@ export default function HomePage() {
         body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
-        sessionStorage.setItem("cd_user", JSON.stringify({ name: "Admin", email }));
+        writeStoredUser({ name: "Admin", email });
         track({ type: "user_login", name: "Admin", email, isAdmin: true });
         window.location.href = "/admin/dashboard";
         return;
@@ -932,11 +977,9 @@ export default function HomePage() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         const name = data.name || email.split("@")[0];
-        const initial = name.charAt(0).toUpperCase();
-        setIsLoggedIn(true);
-        setUserInfo({ name, email, avatar: initial });
         setShowLoginModal(false);
-        sessionStorage.setItem("cd_user", JSON.stringify({ name, email }));
+        // 写入订阅存储 → userInfo / isLoggedIn 自动更新（无需在此 setState 登录态）
+        writeStoredUser({ name, email });
         track({ type: "user_login", name, email });
         return;
       }
@@ -950,10 +993,8 @@ export default function HomePage() {
   }
 
   function handleLogout() {
-    setIsLoggedIn(false);
-    setUserInfo(null);
     setShowProfileMenu(false);
-    sessionStorage.removeItem("cd_user");
+    writeStoredUser(null);
     fetch("/api/user/logout", { method: "POST" }).catch(() => {});
   }
   function handleRerun() {
@@ -974,33 +1015,9 @@ export default function HomePage() {
   }
 
   /** Custom rAF smooth scroll — pauses heavy animations during scroll to prevent jank */
-  function smoothScrollTo(container: HTMLElement, targetTop: number, duration: number) {
-    // Add scrolling class to disable animations/compositing during scroll
-    container.classList.add('is-scrolling');
-
-    const startTop = container.scrollTop;
-    const distance = targetTop - startTop;
-    const startTime = performance.now();
-
-    function step(currentTime: number) {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      // Ease-out cubic for natural deceleration
-      const eased = 1 - Math.pow(1 - progress, 3);
-      container.scrollTop = startTop + distance * eased;
-
-      if (progress < 1) {
-        requestAnimationFrame(step);
-      } else {
-        // Scroll complete — remove class to re-enable animations
-        requestAnimationFrame(() => {
-          container.classList.remove('is-scrolling');
-        });
-      }
-    }
-
-    requestAnimationFrame(step);
-  }
+  // 实现已移到模块作用域（见文件上方的 smoothScrollTo）：
+  // 它不依赖任何组件状态，留在组件内会被 react-hooks/purity 判为
+  // 「render 期 impure 调用」（performance.now）。
 
   function scrollToTop() {
     const el = scrollRef.current;
@@ -2192,9 +2209,8 @@ export default function HomePage() {
                 {activeModal === 'profile' && (
                   <ProfileModalContent userInfo={userInfo} onClose={() => setActiveModal(null)} onUpdateUser={(name) => {
                     if (userInfo) {
-                      const updated = { ...userInfo, name, avatar: name.charAt(0).toUpperCase() };
-                      setUserInfo(updated);
-                      sessionStorage.setItem('cd_user', JSON.stringify({ name, email: userInfo.email }));
+                      // 写入订阅存储即可，avatar 由姓名推导，不必在此自行拼接
+                      writeStoredUser({ name, email: userInfo.email });
                     }
                   }} />
                 )}
