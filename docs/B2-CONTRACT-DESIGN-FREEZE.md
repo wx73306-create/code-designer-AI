@@ -219,6 +219,12 @@ score || 0        // ❌ 同理
 | 3. Observe（覆盖率 / null 比例 / 双写漂移） | ✅ | 见下「迁移 Phase 3 · Observe 落地说明」 |
 | 4. Deprecate（停止生产 `similarity`，保留读取） | ⏸ | 等观察期数据满足准入后再决策 |
 
+> **观察期开闸（2026-09-24，B.2.4）**：`docker-compose.yml` 对 app 服务默认值改为
+> `RECONSTRUCTION_DIFF=on`（留空即启用，显式写 `off` 可关闭），还原度开始产生真实样本。
+> 在此之前该字段一律「未产生」；B.2.3.1 修掉「开关关闭却写 `null`」之后，观察数据才第一次可信
+> （未开启记 `missing`、不可得记 `unavailable`、测得记 `measured`）。
+> Phase 4 的准入判断请等样本积累后再看 `/admin/migration` 的闸门结论，不要凭少量样本拍板。
+
 > **编号易混**：`/api/track` 传输是**实现顺序**的第 3 项（B.2.3），与本节四阶段迁移的
 > Phase 3 不是同一件事。上表第三行说的是 Observe。
 

@@ -72,6 +72,11 @@ services:
       NODE_ENV: "production"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
+      # B.2.4：开启还原度度量 —— 契约 §6 的 Phase 3 观察期需要真实样本，
+      # 否则 reconstructionScore 永远是「未产生」，Phase 4（停用 similarity）无从判断。
+      # 提示：compose 的 environment 优先于 env_file，所以 .env 里留空时按这里的默认值
+      # "on" 生效；想关掉请显式写 off。每次生成会多一次生成页渲染（约 +3s）。
+      RECONSTRUCTION_DIFF: "${RECONSTRUCTION_DIFF:-on}"
     ports:
       - "3100:3000"
 
