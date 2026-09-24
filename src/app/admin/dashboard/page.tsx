@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
-  Users, Cpu, CheckCircle2, Clock, DollarSign, Wifi, Activity,
-  Globe, Loader2, TrendingUp, TrendingDown, ArrowRight, Bot, Sparkles,
+  Users, Cpu, CheckCircle2, Clock, DollarSign, Activity,
+  Globe, Loader2, ArrowRight, Bot, Sparkles,
   Eye, Code2, ShieldCheck, Zap, Power, AlertTriangle,
 } from 'lucide-react';
 import { usePoll, formatDuration, formatNumber } from '../use-admin-poll';
@@ -110,13 +111,14 @@ export default function DashboardPage() {
   const { data, lastUpdated } = usePoll<OverviewResponse>('/api/admin/stats?section=overview', 2500);
   const { data: agentsData } = usePoll<AgentsResponse>('/api/admin/stats?section=agents', 3000);
   const { data: qualityData } = usePoll<QualityResponse>('/api/admin/stats?section=quality', 5000);
-  const [tick, setTick] = useState(0);
-
+  // 每秒推进一次「现在」。相对时间（耗时 / Ns ago）都基于它计算 ——
+  // Date.now() 不能在 render 里直接调用（React 纯函数规则），所以放进 state。
+  // 这个 state 同时取代了原来的 tick 计数器：它每次变化都会触发重渲染。
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  void tick;
 
   const stats = data?.stats;
   const generations = data?.recentGenerations ?? [];
@@ -127,10 +129,16 @@ export default function DashboardPage() {
   const [genEnabled, setGenEnabled] = useState(true);
   const [toggling, setToggling] = useState(false);
 
-  // 服务端状态同步到本地（轮询拉取）
-  useEffect(() => {
-    if (stats && !toggling) setGenEnabled(stats.generationEnabled);
-  }, [stats?.generationEnabled, toggling]);
+  // 服务端状态同步到本地（轮询拉取）。
+  // 用 render 期派生替代 effect：effect 里同步 setState 会触发级联渲染
+  // （react-hooks/set-state-in-effect），而这里本质就是「外部值变了就跟着改」。
+  // toggling 期间保持乐观更新的本地值，不被轮询结果覆盖。
+  const serverEnabled = stats?.generationEnabled;
+  const [syncedServerEnabled, setSyncedServerEnabled] = useState(serverEnabled);
+  if (!toggling && serverEnabled !== undefined && serverEnabled !== syncedServerEnabled) {
+    setSyncedServerEnabled(serverEnabled);
+    setGenEnabled(serverEnabled);
+  }
 
   async function toggleGeneration() {
     if (toggling) return;
@@ -197,7 +205,7 @@ export default function DashboardPage() {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-[#34C759]" />
             </span>
             <span className="text-xs text-white/50 tabular-nums">
-              {lastUpdated ? `${Math.max(0, Math.floor((Date.now() - lastUpdated) / 1000))}s ago` : '连接中…'}
+              {lastUpdated ? `${Math.max(0, Math.floor((now - lastUpdated) / 1000))}s ago` : '连接中…'}
             </span>
           </div>
         </div>
@@ -296,7 +304,7 @@ export default function DashboardPage() {
                   {runningTasks.slice(0, 3).map((g) => (
                     <div key={g.id} className="flex items-center justify-between text-xs">
                       <span className="text-white/50 truncate max-w-[180px]">{g.user} → {g.url.replace(/^https?:\/\//, '').slice(0, 24)}</span>
-                      <span className="text-blue-400/70 tabular-nums">{g.currentStage} · {formatDuration(Date.now() - g.startedAt)}</span>
+                      <span className="text-blue-400/70 tabular-nums">{g.currentStage} · {formatDuration(now - g.startedAt)}</span>
                     </div>
                   ))}
                 </div>
@@ -347,9 +355,9 @@ export default function DashboardPage() {
           <section>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-medium text-white/60">Recent Tasks</h2>
-              <a href="/admin/generations" className="text-xs text-[#0071E3] hover:text-[#0071E3]/80 flex items-center gap-1 transition-colors">
+              <Link href="/admin/generations" className="text-xs text-[#0071E3] hover:text-[#0071E3]/80 flex items-center gap-1 transition-colors">
                 查看全部 <ArrowRight className="w-3 h-3" />
-              </a>
+              </Link>
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-white/[0.06] bg-white/[0.02]">
@@ -383,7 +391,7 @@ export default function DashboardPage() {
                           </td>
                           <td className="px-5 py-3 text-white/50 tabular-nums text-xs whitespace-nowrap">
                             {g.status === 'running' ? (
-                              <span className="text-blue-400">{formatDuration(Date.now() - g.startedAt)}</span>
+                              <span className="text-blue-400">{formatDuration(now - g.startedAt)}</span>
                             ) : formatDuration(g.durationMs)}
                           </td>
                           <td className="px-5 py-3 text-white/50 tabular-nums text-xs">{g.tokens ? formatNumber(g.tokens) : '—'}</td>

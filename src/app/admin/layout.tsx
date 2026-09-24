@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import {
   Code2, LayoutDashboard, Users, FolderOpen, Cpu, Activity,
-  BarChart3, DollarSign, Settings, LogOut, ShieldCheck, Bot, AlertTriangle,
+  BarChart3, DollarSign, Settings, LogOut, Bot, AlertTriangle,
   ArrowLeft, PanelRightOpen, PanelRightClose, RotateCcw, ExternalLink,
   Monitor, Tablet, Smartphone, Radar, Gauge, Terminal, Shield, Layers, GitBranch,
 } from "lucide-react"
@@ -34,17 +34,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const isLoginPage = pathname === "/admin/login"
   const [authed, setAuthed] = useState(false)
-  const [checking, setChecking] = useState(true)
+  // 登录页不做鉴权、直接放行 —— 用初始 state 表达，而不是在 effect 里同步 setState
+  // （后者会触发 react-hooks/set-state-in-effect 的级联渲染告警）。
+  const [checking, setChecking] = useState(!isLoginPage)
   const [showPreview, setShowPreview] = useState(true)
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop")
   const [iframeKey, setIframeKey] = useState(0)
 
   useEffect(() => {
     // 登录页不做鉴权，直接放行
-    if (isLoginPage) {
-      setChecking(false)
-      return
-    }
+    if (isLoginPage) return
     // 服务端校验会话 Cookie（httpOnly，无法被前端 JS 读取/伪造）
     fetch("/api/admin/me", { cache: "no-store" })
       .then((r) => r.json())

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { ShieldCheck, User as UserIcon, Loader2, Wifi } from 'lucide-react';
 import { usePoll, formatTimeAgo, formatClock } from '../use-admin-poll';
 
@@ -21,7 +22,14 @@ interface UsersResponse {
 export default function UsersPage() {
   const { data } = usePoll<UsersResponse>('/api/admin/stats?section=users', 3000);
   const users = data?.users ?? [];
-  const onlineCutoff = Date.now() - 5 * 60 * 1000;
+  // 「在线」是相对「现在」判定的：Date.now() 不能在 render 里直接调用，
+  // 放进 state 由定时器推进，这样判定结果也稳定可复现。
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const onlineCutoff = now - 5 * 60 * 1000;
 
   return (
     <div className="space-y-8">

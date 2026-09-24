@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Bot, Loader2, CheckCircle2, XCircle, RotateCcw, Globe } from 'lucide-react';
-import { usePoll, formatDuration, formatTimeAgo, formatNumber, truncateUrl } from '../use-admin-poll';
+import { usePoll, formatDuration, formatTimeAgo, formatNumber } from '../use-admin-poll';
 import {
   formatScoreView,
   readQualityView,

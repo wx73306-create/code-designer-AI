@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react"
 import {
-  Settings, Cpu, Database, Pencil, Save, ChevronDown, ChevronUp,
+  Settings, Cpu, Database, Save, ChevronDown, ChevronUp,
   Zap, ShieldCheck, Eye, Code2, Brain, RotateCcw, AlertTriangle,
-  Check, X, Plus, Trash2, ToggleLeft, ToggleRight, Power,
+  Check, Plus, Trash2, ToggleLeft, ToggleRight, Power,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { useModelSettings, type ModelProvider, type PipelineStage } from "@/store/model-settings"
 
 const COST_DATA = [
@@ -15,7 +16,7 @@ const COST_DATA = [
   { provider: "Google", today: 0, tokens: "0", cost: 0, successRate: 0 },
 ]
 
-const STAGE_META: Record<string, { label: string; icon: any }> = {
+const STAGE_META: Record<string, { label: string; icon: LucideIcon }> = {
   vision: { label: "视觉分析 (Vision)", icon: Eye },
   planning: { label: "架构规划 (Planning)", icon: Brain },
   code: { label: "代码生成 (Code)", icon: Code2 },
@@ -133,7 +134,9 @@ export default function SettingsPage() {
     setProviders(providers.map(p => p.id === id ? { ...p, [field]: value } : p))
   }
 
-  function updatePipelineStage(stage: string, field: keyof PipelineStage, value: any) {
+  // provider / model 传字符串，temperature / maxTokens 传数字 —— 用联合类型取代 any，
+  // 这样写错类型的调用会在编译期就被挡住。
+  function updatePipelineStage(stage: string, field: keyof PipelineStage, value: string | number) {
     setPipeline(pipeline.map(p => p.stage === stage ? { ...p, [field]: value } : p))
   }
 

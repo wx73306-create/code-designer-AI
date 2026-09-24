@@ -81,7 +81,14 @@ export default function MonitorPage() {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => { setLastCheck(0); }, [data?.serverTime]);
+  // 服务端时间推进 = 刚收到新数据，把「距上次更新」归零。
+  // 改用 render 期派生：effect 里同步 setState 会触发级联渲染
+  // （react-hooks/set-state-in-effect），而这里本质就是「外部值变了就跟着改」。
+  const [syncedServerTime, setSyncedServerTime] = useState(data?.serverTime);
+  if (data?.serverTime !== syncedServerTime) {
+    setSyncedServerTime(data?.serverTime);
+    setLastCheck(0);
+  }
 
   const apiStatus = data?.apiHealth.status ?? 'idle';
 

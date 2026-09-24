@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { usePoll, formatDuration, formatNumber, formatClock } from '../../use-admin-poll';
 import {
-  ArrowLeft, Globe, Eye, Palette, Sparkles, Brain, Code2, ShieldCheck, Zap,
-  Download, CheckCircle2, XCircle, Clock, Loader2, ChevronRight,
+  ArrowLeft, Globe, Eye, Palette, Brain, Code2, ShieldCheck, Zap,
+  Download, CheckCircle2, XCircle, Loader2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -115,7 +115,6 @@ export default function TaskDetailPage() {
   const meta = STATUS_META[generation.status];
   const currentStageIdx = STAGE_ORDER.indexOf(generation.currentStage);
   const totalTokens = relatedCalls.reduce((s, c) => s + c.totalTokens, 0);
-  const totalCost = relatedCalls.reduce((s, c) => s + c.cost, 0);
 
   return (
     <div className="space-y-8">
@@ -154,7 +153,6 @@ export default function TaskDetailPage() {
             {PIPELINE.map((stage, idx) => {
               const Icon = stage.icon;
               const stageCalls = relatedCalls.filter((c) => c.step === stage.key);
-              const stageSuccess = stageCalls.filter((c) => c.status === 'success').length;
               const stageFailed = stageCalls.filter((c) => c.status === 'error').length;
               const stageTokens = stageCalls.reduce((s, c) => s + c.totalTokens, 0);
               const stageDuration = stageCalls.reduce((s, c) => s + c.durationMs, 0);
