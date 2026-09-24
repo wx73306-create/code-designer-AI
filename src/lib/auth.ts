@@ -56,16 +56,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as any).role
+        token.role = (user as { role?: unknown }).role
         token.id = user.id
       }
       return token
     },
 
     async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).role = (token as any).role
-        (session.user as any).id = (token as any).id
+      // ⚠️ 这里必须用局部变量，不能写成两行「行首为括号」的语句：
+      //    (session.user as any).role = (token as any).role
+      //    (session.user as any).id   = (token as any).id
+      // 生产构建压缩会丢掉换行，把第二行并入第一行成为一次函数调用
+      //   → token.role(session.user).id = token.id
+      // 运行时抛 JWTSessionError: TypeError: t.role is not a function，
+      // 导致登录成功却读不到会话（所有 /admin 与 /api/admin 返回 Unauthorized）。
+      // dev 不压缩所以看不出来，只有生产镜像会炸。
+      const sessionUser = session.user as
+        | { role?: unknown; id?: unknown }
+        | undefined
+      if (sessionUser) {
+        const claims = token as { role?: unknown; id?: unknown }
+        sessionUser.role = claims.role
+        sessionUser.id = claims.id
       }
       return session
     },
