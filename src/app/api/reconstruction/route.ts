@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isReconstructionDiffEnabled, runReconstruction } from '@/lib/reconstruction';
 import type { CapturePairResult } from '@/lib/reconstruction';
 import type { ReconstructionScore, RenderResult } from '@/types/reconstruction';
+import { recordGenerationReconstruction } from '@/lib/migration/generation-ledger';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -32,6 +33,8 @@ interface ReconstructionRequestBody {
   html?: unknown;
   url?: unknown;
   originalScreenshot?: unknown;
+  /** B.2.4.1：客户端传来的生成 ID，用于把服务端算出的还原度分数权威写入账本。 */
+  generationId?: unknown;
 }
 
 /** 失败兜底响应的形状（fail-open，绝不 500 打断生成链路）。 */
@@ -58,6 +61,7 @@ export async function POST(request: NextRequest) {
   const url = typeof body.url === 'string' ? body.url : '';
   const originalScreenshot =
     typeof body.originalScreenshot === 'string' ? body.originalScreenshot : undefined;
+  const generationId = typeof body.generationId === 'string' ? body.generationId : undefined;
 
   if (!html.trim()) {
     return NextResponse.json({ error: 'html is required' }, { status: 400 });
@@ -76,6 +80,10 @@ export async function POST(request: NextRequest) {
         `clone=${run.render.status}(${Math.round(run.clone.length / 1024)}KB) ` +
         `score=${run.score.score ?? 'null'} total=${run.timings.totalMs}ms`,
     );
+    // B.2.4.1：还原度由服务端权威写入账本（不再经过客户端埋点，杜绝伪造）。
+    if (generationId) {
+      void recordGenerationReconstruction({ id: generationId, score: run.score.score });
+    }
     return NextResponse.json({ enabled: true, ...run });
   } catch (err) {
     // fail-open：还原度度量失败不阻断生成链路
@@ -97,6 +105,10 @@ export async function POST(request: NextRequest) {
       timings: { cloneMs: 0, originalMs: 0, totalMs: 0 },
       error: message,
     };
+    // B.2.4.1：开关开但本次算不出 → 记 unavailable（produced=true, value=null）。
+    if (generationId) {
+      void recordGenerationReconstruction({ id: generationId, score: null });
+    }
     return NextResponse.json(response);
   }
 }

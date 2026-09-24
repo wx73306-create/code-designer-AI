@@ -93,40 +93,105 @@ export async function recordGenerationStart(input: GenerationStartInput): Promis
   }
 }
 
-export interface GenerationCompleteInput {
+/**
+ * B.2.4.1 — 质量分由服务端权威写入。
+ *
+ * 之前质量分（qualityScore / similarity）由客户端在 `generation_complete` 埋点里上报，
+ * /api/track 原样写进账本 —— 登录用户可伪造任意 qualityScore 污染迁移样本（见 #16）。
+ * 现在改为：/api/mimo 的 qa 步骤算出 overall_score 后，由服务端直接落账本，
+ * 客户端不再能影响这两个数字。
+ */
+export interface GenerationQualityInput {
   id: string;
-  /** create 路径的兜底身份信息（若 generation_start 从未到达） */
-  url?: string;
-  user?: string;
-  email?: string;
-  goal?: string;
-  model?: string;
+  /** 视觉质量分 0-100（mimo qa 步骤服务端算出的 overall_score）。 */
+  overallScore: number;
+}
+
+/** 记录质量分（服务端权威）。双写 similarity = overallScore 以保证 Phase 4 漂移闸门可读。 */
+export async function recordGenerationQuality(input: GenerationQualityInput): Promise<void> {
+  try {
+    const rounded = Math.min(100, Math.max(0, Math.round(input.overallScore)));
+    await prisma.generation.upsert({
+      where: { externalId: input.id },
+      create: {
+        externalId: input.id,
+        url: '',
+        status: 'running',
+        startedAt: new Date(),
+        qualityScore: rounded,
+        qualityScoreProduced: true,
+        similarity: rounded,
+      },
+      update: {
+        qualityScore: rounded,
+        qualityScoreProduced: true,
+        similarity: rounded,
+      },
+    });
+  } catch (err) {
+    console.warn('[Ledger] recordGenerationQuality failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * B.2.4.1 — 还原度由服务端权威写入。
+ *
+ * 还原度分数本来就是 /api/reconstruction 服务端算出来的（客户端只转发），
+ * 现在直接由该路由落账本，不再经过客户端埋点。
+ * score 为 null 表示「开关开但本次算不出」→ 记 unavailable（produced=true, value=null）。
+ */
+export interface GenerationReconstructionInput {
+  id: string;
+  /** 还原度 0-100，或 null（已尝试但不可得）。 */
+  score: number | null;
+}
+
+/** 记录还原度（服务端权威）。 */
+export async function recordGenerationReconstruction(input: GenerationReconstructionInput): Promise<void> {
+  try {
+    const reconstruction = producedNumber(input.score);
+    await prisma.generation.upsert({
+      where: { externalId: input.id },
+      create: {
+        externalId: input.id,
+        url: '',
+        status: 'running',
+        startedAt: new Date(),
+        reconstructionScore: reconstruction.value,
+        reconstructionScoreProduced: reconstruction.produced,
+      },
+      update: {
+        reconstructionScore: reconstruction.value,
+        reconstructionScoreProduced: reconstruction.produced,
+      },
+    });
+  } catch (err) {
+    console.warn('[Ledger] recordGenerationReconstruction failed:', err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * B.2.4.1 — 生成完成时只做「终态收口」，不再写任何分数。
+ * 分数已由 recordGenerationQuality / recordGenerationReconstruction 在服务端落账本。
+ * reconstructionMeta 仍由客户端随 completion 上报（账本列当前为只写、不被迁移闸门/界面读取）。
+ */
+export interface GenerationFinalizeInput {
+  id: string;
   files?: number;
   tokens?: number;
   durationMs?: number;
-  similarity?: number;
-  qualityScore?: number | null;
-  reconstructionScore?: number | null;
   reconstructionMeta?: unknown;
 }
 
-/** 记录生成完成（含 B.2 双分数字段与四态标记）。 */
-export async function recordGenerationComplete(input: GenerationCompleteInput): Promise<void> {
+/** 记录生成完成（终态 + 运维字段），不触碰分数。 */
+export async function recordGenerationComplete(input: GenerationFinalizeInput): Promise<void> {
   try {
-    const quality = producedNumber(input.qualityScore);
-    const reconstruction = producedNumber(input.reconstructionScore);
-
     const data = {
       status: 'completed',
       completedAt: new Date(),
       files: input.files,
       tokens: input.tokens,
       durationMs: input.durationMs,
-      similarity: typeof input.similarity === 'number' ? input.similarity : null,
-      qualityScore: quality.value,
-      qualityScoreProduced: quality.produced,
-      reconstructionScore: reconstruction.value,
-      reconstructionScoreProduced: reconstruction.produced,
       reconstructionMeta:
         input.reconstructionMeta === undefined
           ? undefined
@@ -137,11 +202,7 @@ export async function recordGenerationComplete(input: GenerationCompleteInput): 
       where: { externalId: input.id },
       create: {
         externalId: input.id,
-        url: input.url ?? '',
-        user: input.user,
-        email: input.email,
-        goal: input.goal,
-        model: input.model,
+        url: '',
         startedAt: new Date(),
         ...data,
       },

@@ -1205,7 +1205,7 @@ async function runWorkflow() {
       const res = await fetch('/api/reconstruction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ html: previewHtml, url, originalScreenshot: websiteScreenshot }),
+        body: JSON.stringify({ html: previewHtml, url, originalScreenshot: websiteScreenshot, generationId }),
         signal: workflowAbortController?.signal,
       });
       if (res.ok) {

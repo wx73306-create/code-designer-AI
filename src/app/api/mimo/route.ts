@@ -22,6 +22,8 @@ import { buildPremiumIdentityPrompt, formatPremiumRulesContext } from '@/lib/cod
 import { buildModeControlPrompt, formatEnhancementPlanContext, buildEnhancementUserMessage, buildEnhancementSystemPrompt } from '@/lib/design-mode';
 import { liveStats } from '@/lib/live-stats';
 import { getRequestAuth } from '@/lib/admin-session';
+import { normalizeVisualScore } from '@/lib/visual-evaluation/schema';
+import { recordGenerationQuality } from '@/lib/migration/generation-ledger';
 import { consumeQuotaByEmail } from '@/lib/quota';
 import { checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
 
@@ -2027,6 +2029,18 @@ export async function POST(request: NextRequest) {
             } catch {
               // If all JSON parsing fails, return raw text
               parsed = { raw: answerAcc };
+            }
+          }
+
+          // --- B.2.4.1：质量分服务端权威写入（防客户端伪造污染迁移样本）---
+          // mimo 的 qa 步骤算出的 overall_score 直接落账本；/api/track 不再接受客户端分数。
+          // 这里用的 normalizeVisualScore 与客户端完全一致，故账本分数 == 界面显示分数。
+          if (step === 'qa' && typeof generationId === 'string') {
+            try {
+              const visualScore = normalizeVisualScore(parsed, 1);
+              void recordGenerationQuality({ id: generationId, overallScore: visualScore.overall_score });
+            } catch {
+              // 评分规范化失败不影响主流程
             }
           }
 

@@ -87,22 +87,17 @@ export async function POST(request: NextRequest) {
           ...(reconstructionMeta !== undefined ? { reconstructionMeta } : {}),
         });
 
-        // 持久化账本：四态标记由 ledger 内部按「是否上报过」推断
-        // （undefined → 未产生；显式 null → 已尝试但不可得）。
+        // 持久化账本：B.2.4.1 起分数改为服务端权威写入（recordGenerationQuality /
+        // recordGenerationReconstruction 在 /api/mimo、/api/reconstruction 里落账本），
+        // 这里只做终态收口 + 运维字段 + reconstructionMeta（账本列只写、不被闸门/界面读取）。
+        // 客户端随 completion 上报的 qualityScore / reconstructionScore / similarity 一律忽略，
+        // 即便旧客户端伪造 999 也不会进账本。
         const liveRecord = liveStats.generations.find((g) => g.id === completeId);
         void recordGenerationComplete({
           id: completeId,
-          url: liveRecord?.url,
-          user: liveRecord?.user,
-          email: liveRecord?.email,
-          goal: liveRecord?.goal,
-          model: liveRecord?.model,
           files: liveRecord?.files,
           tokens: liveRecord?.tokens,
           durationMs: liveRecord?.durationMs,
-          similarity: liveRecord?.similarity,
-          ...(qualityScore !== undefined ? { qualityScore } : {}),
-          ...(reconstructionScore !== undefined ? { reconstructionScore } : {}),
           ...(reconstructionMeta !== undefined ? { reconstructionMeta } : {}),
         });
         return NextResponse.json({ ok: true });
