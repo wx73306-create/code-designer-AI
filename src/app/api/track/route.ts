@@ -4,7 +4,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { liveStats } from '@/lib/live-stats';
-import { consumeQuotaByEmail } from '@/lib/quota';
 import { pickReconstructionMeta, pickScore } from '@/lib/api/quality-payload';
 
 export const dynamic = 'force-dynamic';
@@ -30,10 +29,15 @@ export async function POST(request: NextRequest) {
           goal: String(body.goal || ''),
           model: String(body.model || 'mimo-v2.5'),
         });
-        // 原子扣减配额（每次生成扣 1，数据库事务保证不超额）
-        if (email && email !== 'anonymous') {
-          consumeQuotaByEmail(email).catch(() => {});
-        }
+        // ⚠️ 这里**不再**扣配额（2026-09-24 修复）。
+        //
+        // 配额唯一入口是带鉴权的 `POST /api/quota`（由 use-workflow 在生成开始时调用）。
+        // 本路由原先也调 consumeQuotaByEmail(email)，造成两个后果：
+        //   1. 一次生成被扣 2 次 —— limit=2 时用户实际只能生成 1 次，与页面
+        //      「免费体验每天 2 次」的承诺不符；
+        //   2. 本路由**没有任何鉴权**，email 直接取自请求体，
+        //      任何人都能构造 { type:'generation_start', email:'受害者' } 刷空他人配额。
+        // 埋点路由只做埋点：不产生副作用，尤其不碰计费状态。
         return NextResponse.json({ ok: true, id });
       }
 
