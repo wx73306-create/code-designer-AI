@@ -29,7 +29,7 @@ import { buildPreviewHtml, postProcessHtml } from '@/lib/preview-utils';
 import { validateGeneratedCode } from '@/lib/code-rules';
 import { extractAnimationScript } from '@/lib/animation';
 import { normalizeEnhancementPlan, GENERATION_MODES } from '@/lib/design-mode';
-import { deriveReconstructionMeta } from '@/lib/reconstruction/quality-metrics';
+import { deriveReconstructionMeta, toQualityMetrics } from '@/lib/reconstruction/quality-metrics';
 
 // ---------------------------------------------------------------------------
 // MiMo API Client (client-side)
@@ -1443,11 +1443,15 @@ async function runWorkflow() {
     // ---- 实时埋点：任务完成 ----
     const finalState = useAgentStore.getState().task;
     const fileCount = finalState.generatedCode instanceof Map ? finalState.generatedCode.size : 0;
+    // B.2.3：上报新契约字段。toQualityMetrics 保证
+    // ① 读取优先级 qualityScore > similarity（similarity 仍带上，供老数据兜底）
+    // ② null（不可得）不被塌成 undefined / 0；undefined 会被 JSON.stringify 丢掉 = 字段不产生
+    const completionMetrics = toQualityMetrics(finalState.qaResult ?? {});
     track({
       type: 'generation_complete',
       id: generationId,
       files: fileCount,
-      similarity: finalState.qaResult?.similarity,
+      ...completionMetrics,
     });
 
     // ---- 实时埋点：生成质量（Visual Evaluation + Style Match + Code Validator）----

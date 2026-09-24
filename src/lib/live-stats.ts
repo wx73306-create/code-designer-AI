@@ -7,6 +7,7 @@
 // =====================================================================
 
 import os from 'os';
+import type { ReconstructionMeta } from '@/types/agent';
 
 // ---- Types ------------------------------------------------------------
 
@@ -26,7 +27,22 @@ export interface GenerationRecord {
   tokens?: number;
   cost?: number;
   files?: number;
+  /**
+   * @deprecated 历史兼容字段。语义是**质量分**（生产侧赋的是 `visualScore.overall_score`），
+   * 不是相似度。老数据仍要保留，新代码读 `qualityScore`。
+   */
   similarity?: number;
+  /**
+   * 视觉质量分 0-100。
+   *
+   * 三态（docs/B2-CONTRACT-DESIGN-FREEZE.md §4）：
+   * `undefined` = 老客户端 / 未上报；`null` = 有流程但不可得；`number` = 有效测量值（含 0）。
+   */
+  qualityScore?: number | null;
+  /** 还原度 0-100（投影标量）。三态同上。 */
+  reconstructionScore?: number | null;
+  /** 还原度明细：参与测量的区域 / 降级原因 / diff 引用。 */
+  reconstructionMeta?: ReconstructionMeta;
   error?: string;
 }
 
@@ -120,6 +136,17 @@ function estimateCost(tokens: number): number {
   return Math.round((tokens / 1000) * COST_PER_1K_TOKENS * 10000) / 10000;
 }
 
+/**
+ * 日志/展示用的分数格式化。
+ *
+ * `null` 与 `undefined` 都显示「—」，但**二者在存储上不能互换**
+ * （undefined = 没采集，null = 不可得）——这里只是展示层收敛，不改变语义。
+ * 绝不能写 `?? 0`。
+ */
+function formatScore(value: number | null | undefined): string {
+  return value == null ? '—' : `${value.toFixed(1)}%`;
+}
+
 // ---- Tracker ------------------------------------------------------------
 
 class LiveStatsTracker {
@@ -208,7 +235,18 @@ class LiveStatsTracker {
     if (message) this.pushEvent('generation', `[${gen.user}] ${message}`, 'info');
   }
 
-  generationComplete(id: string, data: { tokens?: number; files?: number; similarity?: number }) {
+  generationComplete(
+    id: string,
+    data: {
+      tokens?: number;
+      files?: number;
+      /** @deprecated 历史兼容：老客户端仍可能只上报 similarity（语义实际是质量分） */
+      similarity?: number;
+      qualityScore?: number | null;
+      reconstructionScore?: number | null;
+      reconstructionMeta?: ReconstructionMeta;
+    },
+  ) {
     const gen = this.generations.find((g) => g.id === id);
     if (!gen) return;
     gen.status = 'completed';
@@ -222,10 +260,22 @@ class LiveStatsTracker {
     gen.cost = estimateCost(gen.tokens);
     gen.files = data.files;
     gen.similarity = data.similarity;
+
+    // 只有「确实上报了」才写字段。
+    // 老客户端（只发 similarity）必须保持新字段 absent —— undefined ≠ null：
+    // undefined = 从没采集过（UI → Not measured），null = 采集了但不可得（UI → Unavailable）。
+    if (data.qualityScore !== undefined) gen.qualityScore = data.qualityScore;
+    if (data.reconstructionScore !== undefined) gen.reconstructionScore = data.reconstructionScore;
+    if (data.reconstructionMeta !== undefined) gen.reconstructionMeta = data.reconstructionMeta;
+
     gen.currentStage = 'done';
+
+    // 读取优先级 qualityScore > similarity（冻结合约 §3）。历史数据只有 similarity 时回落。
+    const quality = gen.qualityScore ?? gen.similarity;
     this.pushEvent(
       'generation',
-      `${gen.user} 生成完成 → ${gen.url} (${Math.round(gen.durationMs / 1000)}s, 还原度 ${gen.similarity?.toFixed(1) ?? '—'}%)`,
+      `${gen.user} 生成完成 → ${gen.url} ` +
+        `(${Math.round(gen.durationMs / 1000)}s, 质量分 ${formatScore(quality)} / 还原度 ${formatScore(gen.reconstructionScore)})`,
       'success',
     );
   }

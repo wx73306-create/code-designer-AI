@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { liveStats } from '@/lib/live-stats';
 import { consumeQuotaByEmail } from '@/lib/quota';
+import { pickReconstructionMeta, pickScore } from '@/lib/api/quality-payload';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,13 +41,24 @@ export async function POST(request: NextRequest) {
         liveStats.generationStage(String(body.id || ''), String(body.stage || ''), body.message ? String(body.message) : undefined);
         return NextResponse.json({ ok: true });
 
-      case 'generation_complete':
+      case 'generation_complete': {
+        // B.2.3：三个新字段走统一的边界取值器 —— null 必须保留，
+        // 不能用 `typeof x === 'number' ? x : undefined` 那种写法（会把 null 塌成 undefined）。
+        const qualityScore = pickScore(body.qualityScore);
+        const reconstructionScore = pickScore(body.reconstructionScore);
+        const reconstructionMeta = pickReconstructionMeta(body.reconstructionMeta);
+
         liveStats.generationComplete(String(body.id || ''), {
           tokens: typeof body.tokens === 'number' ? body.tokens : undefined,
           files: typeof body.files === 'number' ? body.files : undefined,
           similarity: typeof body.similarity === 'number' ? body.similarity : undefined,
+          // 只有真正上报了才写键：老客户端上报时新字段保持 absent（不是 null）。
+          ...(qualityScore !== undefined ? { qualityScore } : {}),
+          ...(reconstructionScore !== undefined ? { reconstructionScore } : {}),
+          ...(reconstructionMeta !== undefined ? { reconstructionMeta } : {}),
         });
         return NextResponse.json({ ok: true });
+      }
 
       case 'generation_error':
         liveStats.generationError(String(body.id || ''), String(body.error || 'Unknown error'));

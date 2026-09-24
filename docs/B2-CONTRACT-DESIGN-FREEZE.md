@@ -215,7 +215,25 @@ score || 0        // ❌ 同理
 | Phase | 状态 | 落地 |
 |---|---|---|
 | 1. Add（types + 类型测试） | ✅ | `406a903` + `acc6bd0`（`QualityMetrics` / `ReconstructionMeta`，9 条契约类型测试） |
-| 2. Dual write（generation result 链路） | ✅ | 见下 |
+| 2. Dual write（generation result 链路） | ✅ | `228db5a`（`reconstructionMeta` 派生 + `reconstructionMeta` 写入 + 埋点上报） |
+| 3. API 传输（`/api/track` 接收、`/api/admin/stats` 返回） | ✅ | 见下 |
+
+**Phase 3（B.2.3）落地说明**
+
+- 新增 `src/lib/api/quality-payload.ts`：`pickScore()` / `pickReconstructionMeta()`。
+  **修掉一个会静默丢语义的常见写法** —— `typeof v === 'number' ? v : undefined`
+  会把显式 `null`（有流程但不可得）塌成 `undefined`（从没采集），四态被压成两态。
+  现在 `null → null`、`0 → 0`、`undefined/非法 → undefined`。
+- `/api/track` `generation_complete`：仅当字段**确实上报**时才把键写进 `liveStats.generationComplete`，
+  老客户端仍会走到「新字段 absent」分支。
+- `src/lib/live-stats.ts`：`GenerationRecord` 增加
+  `qualityScore? / reconstructionScore?`（皆 `number | null`）、`reconstructionMeta?`；
+  赋值用 `if (data.x !== undefined)`，保证 `undefined` 与 `null` 不互换。
+- **顺手修一处语义错位**：原完成日志把 `similarity` 标成「还原度」，
+  现改为 `质量分 <qualityScore ?? similarity> / 还原度 <reconstructionScore>`，
+  不可得显示 `—` 而不是 0（读取优先级也在这里生效）。
+- 客户端发送端（`use-workflow.ts` `generation_complete` 埋点）改用 `toQualityMetrics()` 输出，
+  `JSON.stringify` 会丢掉 `undefined` → 天然等价于「字段不产生」，而 `null` 会如实到达服务端。
 
 **Phase 2 落地说明**
 
