@@ -7,7 +7,7 @@ import {
   Code2, LayoutDashboard, Users, FolderOpen, Cpu, Activity,
   BarChart3, DollarSign, Settings, LogOut, ShieldCheck, Bot, AlertTriangle,
   ArrowLeft, PanelRightOpen, PanelRightClose, RotateCcw, ExternalLink,
-  Monitor, Tablet, Smartphone, Radar, Gauge, Terminal, Shield, Layers,
+  Monitor, Tablet, Smartphone, Radar, Gauge, Terminal, Shield, Layers, GitBranch,
 } from "lucide-react"
 
 const NAV_ITEMS = [
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { icon: Radar, label: "Agent 监控", href: "/admin/agents" },
   { icon: Layers, label: "模型管理", href: "/admin/models" },
   { icon: Gauge, label: "生成质量", href: "/admin/quality" },
+  { icon: GitBranch, label: "迁移观察", href: "/admin/migration" },
   { icon: Cpu, label: "API 调用", href: "/admin/api-calls" },
   { icon: Activity, label: "系统监控", href: "/admin/monitor" },
   { icon: BarChart3, label: "数据分析", href: "/admin/analytics" },

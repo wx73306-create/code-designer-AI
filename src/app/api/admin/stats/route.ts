@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { liveStats } from '@/lib/live-stats';
 import { isAdminAuthenticatedServer } from '@/lib/admin-session';
+import { summarizeMigration } from '@/lib/migration/observe';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,16 @@ export async function GET(request: NextRequest) {
 
     case 'quality':
       return NextResponse.json({ quality: liveStats.getQualityStats() });
+
+    // Migration Phase 3 · Observe —— 只统计已完成的任务。
+    // running / error 的记录本来就不会有分数，计入分母只会稀释覆盖率，
+    // 让「迁移是否生效」看起来比实际更差。
+    case 'migration':
+      return NextResponse.json({
+        migration: summarizeMigration(
+          liveStats.generations.filter((g) => g.status === 'completed'),
+        ),
+      });
 
     case 'quota':
       return NextResponse.json(liveStats.getQuotaOverview());

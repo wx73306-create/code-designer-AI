@@ -216,7 +216,11 @@ score || 0        // ❌ 同理
 |---|---|---|
 | 1. Add（types + 类型测试） | ✅ | `406a903` + `acc6bd0`（`QualityMetrics` / `ReconstructionMeta`，9 条契约类型测试） |
 | 2. Dual write（generation result 链路） | ✅ | `228db5a`（`reconstructionMeta` 派生 + `reconstructionMeta` 写入 + 埋点上报） |
-| 3. API 传输（`/api/track` 接收、`/api/admin/stats` 返回） | ✅ | 见下 |
+| 3. Observe（覆盖率 / null 比例 / 双写漂移） | ✅ | 见下「迁移 Phase 3 · Observe 落地说明」 |
+| 4. Deprecate（停止生产 `similarity`，保留读取） | ⏸ | 等观察期数据满足准入后再决策 |
+
+> **编号易混**：`/api/track` 传输是**实现顺序**的第 3 项（B.2.3），与本节四阶段迁移的
+> Phase 3 不是同一件事。上表第三行说的是 Observe。
 
 **Phase 3（B.2.3）落地说明**
 
@@ -259,6 +263,25 @@ B.2.4 Admin / UI     →  admin 页面展示映射、qa-section 微调
 B.2.5 Export         →  export-generator 补齐 reconstructionMeta 输出
 Full Gate            →  vitest / tsc / eslint / build → tag → push
 ```
+
+**迁移 Phase 3 · Observe 落地说明**
+
+- 新增纯函数 `src/lib/migration/observe.ts`：`summarizeMigration(records)` +
+  `deprecateReadiness(summary)`，14 条单测锁口径。
+- 三项观测：
+  1. **新字段覆盖率** —— `qualityScore` / `reconstructionScore` 有多少记录在真的生产。
+     **把 `null` 计入分子**：null 证明字段在生产（通道已通），只是这次不可得。
+  2. **null（不可得）比例** —— 单独列出，避免被「覆盖率」这个总数盖住。
+  3. **双写漂移** —— `similarity` 与 `qualityScore` 同时有值时是否一致。
+     双写期两者都取自 `visualScore.overall_score`，理应恒等；容差 0.01 只吸收浮点噪声，
+     超过即真漂移。
+- **覆盖率的分母口径**：只统计「已完成」的生成任务。running / error 的记录本来就不会
+  有分数，计入分母只会稀释覆盖率，让迁移看起来比实际更差。
+- 缺失一律不进分子而不是当 0 计入 —— 与 B.2.4 `averageMeasured` 同一原则。
+  样本为 0 时覆盖率返回 `null` 而不是 0：0 会被误读成「迁移完全没生效」。
+- `/api/admin/stats?section=migration` 返回汇总；admin 新增「迁移观察」页（侧栏入口）。
+- `deprecateReadiness()` 只给准入判断，不替人做决定：样本为 0 / 有漂移 / 覆盖率不满，
+  任一成立即 blocked。Phase 4 停止生产是不可逆的对外行为变化，闸门宁紧勿松。
 
 ---
 
