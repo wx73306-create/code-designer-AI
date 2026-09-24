@@ -24,6 +24,19 @@ import type { ScoreSource } from '@/lib/score-display';
  */
 export const DRIFT_TOLERANCE = 0.01;
 
+/**
+ * Phase 4 准入要求的最小观察样本数。
+ *
+ * 为什么不能只判 `total > 0`：那样**跑过一次生成就能让闸门放行**。
+ * 而 Phase 4（停止生产 `similarity`）是不可逆的对外行为变化 —— 若还有老客户端
+ * 或某条代码路径只依赖 `similarity`，停产后才会在线上暴露，代价是数据缺失。
+ * n=1 时的「覆盖率 100%、漂移 0」不具代表性，所以给一个样本下限。
+ *
+ * 取值 20 是工程判断（不是统计推导）：够覆盖「不同目标站点 / 两种模式 /
+ * 还原度开关开与关」的常见组合，又不会让观察期无限拖长。可按实际需要调整。
+ */
+export const MIN_READINESS_SAMPLES = 20;
+
 export interface MigrationSummary {
   /** 样本总数（由调用方决定口径，通常是「已完成」的生成记录） */
   total: number;
@@ -144,8 +157,10 @@ export function summarizeMigration(records: readonly ScoreSource[]): MigrationSu
 /**
  * Phase 4 的准入建议 —— 只给判断，不替人做决定。
  *
+ * 停机理由（任一成立即 blocked）：没有样本 / 存在漂移 / 覆盖率不满 /
+ * **样本数少于 {@link MIN_READINESS_SAMPLES}**。
  * 停止生产 similarity 是不可逆的对外行为变化，所以闸门宁紧勿松：
- * 样本为 0、覆盖率不满、或存在任何漂移，都会给出 blocked 及原因。
+ * 「跑过一次且数据好看」不足以放行，那只是证据不足，不是证据充分。
  */
 export type DeprecateReadiness =
   | { kind: 'ready' }
@@ -165,6 +180,13 @@ export function deprecateReadiness(summary: MigrationSummary): DeprecateReadines
     return {
       kind: 'blocked',
       reason: `新字段覆盖率 ${(summary.quality.coverage * 100).toFixed(1)}%，仍有记录未迁移`,
+    };
+  }
+  // 真问题（漂移 / 覆盖率）优先报；到这里说明数据本身没问题，但可能**证据不够**。
+  if (summary.total < MIN_READINESS_SAMPLES) {
+    return {
+      kind: 'blocked',
+      reason: `观察样本仅 ${summary.total} 条，少于准入要求的 ${MIN_READINESS_SAMPLES} 条；样本不足时「全覆盖、零漂移」不具代表性`,
     };
   }
   return { kind: 'ready' };

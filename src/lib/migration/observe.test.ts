@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deprecateReadiness, summarizeMigration } from './observe';
+import { deprecateReadiness, MIN_READINESS_SAMPLES, summarizeMigration } from './observe';
 
 describe('summarizeMigration — 覆盖率口径', () => {
   it('空样本 → 覆盖率是 null 而不是 0（0 会被误读成「迁移没生效」）', () => {
@@ -106,8 +106,51 @@ describe('deprecateReadiness — Phase 4 闸门', () => {
     });
   });
 
-  it('全覆盖且无漂移 → ready', () => {
-    const s = summarizeMigration([{ qualityScore: 91, similarity: 91 }]);
+  it('全覆盖且无漂移、且样本达标 → ready', () => {
+    // 单条记录也能「全覆盖无漂移」，但那只说明证据不足 —— 见下面样本下限的用例。
+    const s = summarizeMigration(
+      Array.from({ length: MIN_READINESS_SAMPLES }, () => ({ qualityScore: 91, similarity: 91 })),
+    );
+    expect(s.total).toBe(MIN_READINESS_SAMPLES);
     expect(deprecateReadiness(s)).toEqual({ kind: 'ready' });
+  });
+
+  it('样本数少于下限 → blocked（即便覆盖率与漂移都正常）', () => {
+    // 修复前的口径是 total > 0 即放行：跑过一次生成就能让闸门开口，
+    // 而 Phase 4 是不可逆变更。这条用例把样本下限钉死。
+    const few = summarizeMigration([
+      { qualityScore: 91, similarity: 91 },
+      { qualityScore: 90, similarity: 90 },
+      { qualityScore: 88, similarity: 88 },
+    ]);
+    expect(few.quality.coverage).toBe(1);
+    expect(few.drift.mismatch).toBe(0);
+    expect(deprecateReadiness(few)).toMatchObject({
+      kind: 'blocked',
+      reason: expect.stringContaining('少于准入要求'),
+    });
+  });
+
+  it('样本差 1 条也不算达标（边界）', () => {
+    const almost = summarizeMigration(
+      Array.from({ length: MIN_READINESS_SAMPLES - 1 }, () => ({ qualityScore: 91, similarity: 91 })),
+    );
+    expect(deprecateReadiness(almost).kind).toBe('blocked');
+
+    const enough = summarizeMigration(
+      Array.from({ length: MIN_READINESS_SAMPLES }, () => ({ qualityScore: 91, similarity: 91 })),
+    );
+    expect(deprecateReadiness(enough).kind).toBe('ready');
+  });
+
+  it('真问题优先于「样本不足」：有漂移时报漂移', () => {
+    const s = summarizeMigration([
+      { qualityScore: 91, similarity: 88 },
+      { qualityScore: 92, similarity: 92 },
+    ]);
+    expect(deprecateReadiness(s)).toMatchObject({
+      kind: 'blocked',
+      reason: expect.stringContaining('漂移'),
+    });
   });
 });

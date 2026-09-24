@@ -304,8 +304,12 @@ Full Gate            →  vitest / tsc / eslint / build → tag → push
 - 缺失一律不进分子而不是当 0 计入 —— 与 B.2.4 `averageMeasured` 同一原则。
   样本为 0 时覆盖率返回 `null` 而不是 0：0 会被误读成「迁移完全没生效」。
 - `/api/admin/stats?section=migration` 返回汇总；admin 新增「迁移观察」页（侧栏入口）。
-- `deprecateReadiness()` 只给准入判断，不替人做决定：样本为 0 / 有漂移 / 覆盖率不满，
-  任一成立即 blocked。Phase 4 停止生产是不可逆的对外行为变化，闸门宁紧勿松。
+- `deprecateReadiness()` 只给准入判断，不替人做决定：样本为 0 / 有漂移 / 覆盖率不满 /
+  **样本数少于 `MIN_READINESS_SAMPLES`（20）**，任一成立即 blocked。
+  Phase 4 停止生产是不可逆的对外行为变化，闸门宁紧勿松。
+  > **2026-09-24 收紧**：原先只判 `total > 0`，等于**跑过一次生成就能放行**——
+  > n=1 时的「覆盖率 100%、漂移 0」只是证据不足，不是证据充分。现改为样本下限 20 条
+  > （工程判断，可调）。判断顺序：真问题（漂移 / 覆盖率）优先报，样本不足单独兜底。
 
 ---
 
