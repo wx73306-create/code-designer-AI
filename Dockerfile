@@ -20,6 +20,10 @@ ARG NPM_REGISTRY
 # 构建期占位：Prisma / Next 在 build 阶段可能会读取该变量
 ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}
+# B.2.3.2：NEXT_PUBLIC_* 会被**内联进客户端产物**，运行时注入无效，
+# 必须经构建参数传入。默认 false（真实模式），展示环境构建时置 true。
+ARG NEXT_PUBLIC_DEMO_MODE
+ENV NEXT_PUBLIC_DEMO_MODE=${NEXT_PUBLIC_DEMO_MODE}
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

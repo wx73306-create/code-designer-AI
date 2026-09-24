@@ -16,6 +16,7 @@ import {
   FolderOpen, X, Key,
 } from "lucide-react";
 import { useAgentStore } from "@/store/agent-store";
+import { isForcedDemoMode, resolveRunMode, runModeBadge } from "@/lib/run-mode";
 import { useWorkflow, cancelWorkflow } from "@/store/use-workflow";
 import { useModelSettings } from "@/store/model-settings";
 import { WorkspaceLayout } from "@/components/workspace/workspace-layout";
@@ -762,6 +763,13 @@ export default function HomePage() {
   const currentAgentId = useAgentStore((s) => s.task.currentAgent);
   const agents = useAgentStore((s) => s.task.agents);
   const activeAgent = currentAgentId ? agents?.[currentAgentId] : null;
+  // B.2.3.2：工作区徽章不再硬编码「演示数据」，改由真实运行状态驱动
+  // （env 强制演示 / 本任务未跑过示例数据 / 真实执行三态）。
+  const runMode = resolveRunMode({
+    forcedDemo: isForcedDemoMode(process.env.NEXT_PUBLIC_DEMO_MODE),
+    taskStatus,
+  });
+  const runBadge = runModeBadge(runMode);
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
     if (!isRunning) return;
@@ -1918,9 +1926,16 @@ export default function HomePage() {
             <div className="h-12 shrink-0 flex items-center justify-between px-4 border-b border-black/[0.06] bg-white/90 backdrop-blur-xl z-30">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-black/80 tracking-tight">Code Designer AI</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FF9500]/12 border border-[#FF9500]/25 text-[10px] font-medium text-[#b25e00]" title="当前为演示模式：分析、截图、评分与部署结果均为模拟数据">
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium ${
+                    runBadge.tone === 'demo'
+                      ? 'bg-[#FF9500]/12 border-[#FF9500]/25 text-[#b25e00]'
+                      : 'bg-[#0071E3]/10 border-[#0071E3]/25 text-[#0057B8]'
+                  }`}
+                  title={runBadge.title}
+                >
                   <Sparkles className="w-2.5 h-2.5" />
-                  演示数据
+                  {runBadge.label}
                 </span>
                 <div className="h-4 w-px bg-black/[0.1]" />
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/[0.04] border border-black/[0.06]">
