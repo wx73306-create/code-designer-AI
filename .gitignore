@@ -65,3 +65,13 @@ repro_timeout.mjs
 
 # 还原度验收产物（本地，不入版本库）
 .verify-reconstruction/
+
+# 数据包归档产物（P1-10 / S-03）：runs/<jobId>/website-package/
+# 内含真实站点的截图与设计 Token，属运行时产物，不入版本库
+runs/
+
+# B.2 样本批次工作目录：整个目录不入库。
+# 原因（安全）：里面的 admin.txt / hdr.txt / sess.json 含有抓取到的 **admin_session cookie**，
+# 属于凭据，绝不能被提交。日志还含模型原文，体积大且持续增长。
+# 需要复现时按 docs/ 里的说明重建（POST /api/admin/login 即可重新拿到会话）。
+.b2verify/

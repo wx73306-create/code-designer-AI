@@ -7,7 +7,9 @@ export const maxDuration = 300; // 5 minutes — preview step generates full HTM
 import { NextRequest, NextResponse } from 'next/server';
 import { callMiMo, callMiMoStream, type ModelConfig } from '@/lib/mimo';
 import { scrapeWebsite } from '@/lib/website-scraper';
-import { buildWebsitePackage, formatPackageContext } from '@/lib/website-package';
+import { archivePackageIfEnabled, buildWebsitePackage, formatPackageContext, gatePackageForStep } from '@/lib/website-package';
+import { applyLocalPaths, localizePackageAssetsIfEnabled, summarizeLocalize } from '@/lib/assets';
+import { describeValidationErrors, inspectWebsitePackage } from '@/lib/schemas';
 import {
   getInteractionPackage,
   getLayoutProbe,
@@ -24,6 +26,7 @@ import { liveStats } from '@/lib/live-stats';
 import { getRequestAuth } from '@/lib/admin-session';
 import { normalizeVisualScore } from '@/lib/visual-evaluation/schema';
 import { recordGenerationQuality } from '@/lib/migration/generation-ledger';
+import { emitQaReport } from '@/lib/qa-report';
 import { consumeQuotaByEmail } from '@/lib/quota';
 import { checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
 
@@ -1647,27 +1650,73 @@ export async function POST(request: NextRequest) {
     } else if (step === 'planning') {
       // Website Intelligence Package — 真实设计 Token 的唯一来源
       // interaction 用 states 粒度：规划只需要知道「哪些组件有多状态」
-      const planningPkgText = formatPackageContext(
-        buildWebsitePackage({
-          scraped: await getScraped(url),
-          interaction: (await getInteraction(url)) ?? undefined,
-          layout: (await getLayout(url)) ?? undefined,
-        }),
-        { interactionLevel: 'states' },
-      );
+      const planningPkg = buildWebsitePackage({
+        scraped: await getScraped(url),
+        interaction: (await getInteraction(url)) ?? undefined,
+        layout: (await getLayout(url)) ?? undefined,
+      });
+      // C2 闸门：契约违约必须显式拒绝（详见 lib/website-package/guard.ts）。
+      // 这里只记日志不抛错 —— 真正的强制点在 code 步骤，规划阶段先保留可观测性。
+      const planningGate = gatePackageForStep(planningPkg, 'planning');
+      // 旁路归档（P1-10 / S-03）：默认 off。开启后把首次完整构建的数据包落盘到
+      // runs/<jobId>/website-package/，供离线复现与「模型当时看到了什么」回溯。
+      // 放在 planning 而不是 code：planning 是每个 generationId 的第一次完整构建。
+      if (generationId) {
+        await archivePackageIfEnabled(planningPkg, { jobId: generationId });
+      }
+      const planningPkgText = planningGate.ok
+        ? formatPackageContext(planningPkg, { interactionLevel: 'states' })
+        : '';
       if (planningPkgText) userMessage += `\n\n${planningPkgText}`;
       userMessage += `\n请根据以上设计分析结果，规划 React 项目的组件树和文件结构。`;
     } else if (step === 'code') {
       // Website Intelligence Package — 精确还原的色值/间距/圆角依据
       // interaction 用 event 粒度：写代码需要「点谁 → 发生什么」，不需要截图
-      const codePkgText = formatPackageContext(
-        buildWebsitePackage({
-          scraped: await getScraped(url),
-          interaction: (await getInteraction(url)) ?? undefined,
-          layout: (await getLayout(url)) ?? undefined,
-        }),
-        { interactionLevel: 'event' },
-      );
+      const codePkg = buildWebsitePackage({
+        scraped: await getScraped(url),
+        interaction: (await getInteraction(url)) ?? undefined,
+        layout: (await getLayout(url)) ?? undefined,
+      });
+      // C2 强制入口：代码生成**必须**输入合法 Intelligence Package。
+      // 契约违约 = 代码缺陷（buildWebsitePackage 理论上不可能产出违约包，见
+      // verify:schema），因此这里拒绝执行而不是带着坏数据继续 —— 否则问题会被
+      // 伪装成「生成质量不稳定」，永远查不到根因。
+      const codeGate = gatePackageForStep(codePkg, 'code');
+      if (!codeGate.ok) {
+        return NextResponse.json(
+          {
+            error: codeGate.reason,
+            code: 'PACKAGE_CONTRACT_VIOLATION',
+            step,
+            details: codeGate.health.errors,
+          },
+          { status: 422 },
+        );
+      }
+
+      // --- P2-03：资源本地化（默认 off，ASSET_LOCALIZE=on 开启）---
+      // 放在 code 步骤而不是 planning：这里才是「生成工程」的入口，也只有这里的
+      // 数据包文本会被写代码的模型读到。规划步骤下载一遍纯属浪费带宽。
+      // 效果：生成出的工程引用 runs/<jobId>/website-package/assets/ 下的本地文件，
+      // **永不热链原站**；防盗链/超时/超大一律落到本地占位图（见 lib/assets/localize.ts）。
+      if (generationId) {
+        const localized = await localizePackageAssetsIfEnabled(codePkg.assets ?? [], {
+          jobId: generationId,
+          sourceUrl: url,
+        });
+        if (localized) {
+          codePkg.assets = applyLocalPaths(codePkg.assets ?? [], localized.assets);
+          console.log(`[assets] ${generationId}: ${summarizeLocalize(localized)}`);
+          // 回填后复查契约：本地化新增的 hash/width/height 也必须合法。
+          // 这里只告警不拦截 —— C2 的硬闸门在上面已经过了，此处是防回归的观测点。
+          const after = inspectWebsitePackage(codePkg);
+          if (!after.ok) {
+            console.warn(`[assets] 本地化后契约校验异常 ${generationId}: ${describeValidationErrors(after.errors)}`);
+          }
+        }
+      }
+
+      const codePkgText = formatPackageContext(codePkg, { interactionLevel: 'event' });
       if (codePkgText) userMessage += `\n\n${codePkgText}`;
       userMessage += `\n请根据以上组件树和设计系统，生成完整的 React + TypeScript + Tailwind CSS 代码。`;
       // 核心身份升级：从复制工具到设计工程师
@@ -1701,8 +1750,11 @@ export async function POST(request: NextRequest) {
         interaction: (await getInteraction(url)) ?? undefined,
         layout: (await getLayout(url)) ?? undefined,
       });
+      // 动效阶段沿用既有「失败降级、不阻断静态页生成」的契约（见 ARCHITECTURE §3）：
+      // 契约违约时只记日志并降级成无包输入，**不**拒绝执行。
+      const animationGate = gatePackageForStep(animationPkg, 'animation');
       userMessage += `\n\n${buildAnimationUserMessage({
-        pkg: animationPkg,
+        pkg: animationGate.ok ? animationPkg : null,
         structure: (context?.componentTree as string) || (context?.structure as string) || undefined,
         mode: (context?.mode as 'clone' | 'enhancement') || 'clone',
       })}`;
@@ -2042,6 +2094,11 @@ export async function POST(request: NextRequest) {
             } catch {
               // 评分规范化失败不影响主流程
             }
+            // --- P3-11：QA 报告产物（json + 人读 md + 一行可取证日志）---
+            // 旁路能力：开关默认关闭（RUN_ARTIFACTS=on 才落盘），且 emitQaReport 永不抛错。
+            // 读的是模型**原始**输出而非归一化结果 —— 只有原文才保留
+            // severity / priority / reason / solution 与「契约表达不了的分类」。
+            void emitQaReport({ generationId, sourceUrl: url, raw: parsed });
           }
 
           // --- Design Knowledge Base matching ---
