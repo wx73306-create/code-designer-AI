@@ -15,6 +15,7 @@ import type { LayoutProbeResult } from '@/lib/browser-intelligence/layout-probe'
 import {
   createEmptyPackage,
   type WebsitePackage,
+  type ScreenshotData,
   type AssetData,
   type ColorInfo,
   type FontInfo,
@@ -30,13 +31,18 @@ import {
 export interface BuildPackageInput {
   /** Raw output of `scrapeWebsite`. */
   scraped: Partial<ScrapedDesignData> | null | undefined;
-  /** Optional desktop screenshot captured alongside the scrape. */
-  screenshot?: {
-    dataUrl: string;
-    width: number;
-    height: number;
-    viewport?: string;
-  };
+  /**
+   * 截图（P1-06 / P1-10）。
+   *
+   * **直接复用 {@link ScreenshotData}，不再另写一份结构相同的内联类型。**
+   * 之前这里把 `dataUrl` 声明成必填，而 `ScreenshotData.dataUrl` 是可选 ——
+   * 两份定义已经开始分叉，`decodeScreenshotDataUrl()` 的返回值当场就装不进来
+   * （类型检查抓到的）。
+   *
+   * `dataUrl` 缺失是**允许**的：宽高已知但拿不到图像字节时，仍值得把它记进数据包
+   * （归档会跳过图片文件，见 `archive.ts`），也仍然应该宣告「模型看过这张图」。
+   */
+  screenshot?: ScreenshotData;
   /**
    * 交互采集结果（Phase 1 Sprint 3 接入）。
    *

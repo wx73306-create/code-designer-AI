@@ -14,6 +14,7 @@
 
 import { createEmptyPackage, WEBSITE_PACKAGE_VERSION } from '@/types/website-package';
 import { buildWebsitePackage } from '@/lib/website-package/adapter';
+import { decodeScreenshotDataUrl } from '@/lib/website-package/screenshot';
 import {
   describeValidationErrors,
   inspectWebsitePackage,
@@ -195,6 +196,32 @@ console.log('\n[6] 真实生产者：buildWebsitePackage 的输出必须过契�
     '真实输出同时是「有料」的（substantive）',
     inspectWebsitePackage(produced).substantive,
     inspectWebsitePackage(produced).emptyParts.join(', '),
+  );
+
+  // 截图入包（P1-06 / P1-10）也纳入契约验收。
+  // **为什么必须在这里而不只在单测**：单测断言的是「我期望的字段形状」，
+  // 这里断言的是「这个形状真的能过契约」。两者漏掉的是不同的东西 ——
+  // 上一次事故就是「单测全绿但真实输出过不了契约」。
+  const png = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0);
+  png.writeUInt32BE(13, 8);
+  png.write('IHDR', 12, 'ascii');
+  png.writeUInt32BE(1280, 16);
+  png.writeUInt32BE(800, 20);
+  const shot = decodeScreenshotDataUrl(png.toString('base64'));
+  check('截图 base64 能解析出真实宽高', shot !== null && shot.width === 1280 && shot.height === 800);
+
+  const withShot = buildWebsitePackage({ scraped, screenshot: shot ?? undefined } as never);
+  const r3 = validateWebsitePackage(withShot);
+  check(
+    '带 screenshot 的真实输出过契约',
+    r3.ok,
+    r3.ok ? undefined : describeValidationErrors(r3.errors),
+  );
+  check(
+    '截图不再被算作空块（日志不会声称注入了一个不存在的块）',
+    !inspectWebsitePackage(withShot).emptyParts.includes('screenshots'),
+    inspectWebsitePackage(withShot).emptyParts.join(', '),
   );
 }
 

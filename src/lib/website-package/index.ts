@@ -10,6 +10,9 @@
 export { buildWebsitePackage } from './adapter';
 export type { BuildPackageInput } from './adapter';
 
+/** 截图入包（P1-06 / P1-10）：base64 → 契约合法的 ScreenshotData（宽高真解析，不猜）。 */
+export { decodeScreenshotDataUrl, MAX_SCREENSHOT_BASE64_CHARS } from './screenshot';
+
 /** 步骤级数据包闸门（C2 / P1-16 / P1-18）：拒绝违约包、显著告警空壳包。 */
 export { gatePackageForStep, packageForPrompt } from './guard';
 export type { PackageGateResult, PackageGateStep } from './guard';

@@ -7,7 +7,7 @@ export const maxDuration = 300; // 5 minutes — preview step generates full HTM
 import { NextRequest, NextResponse } from 'next/server';
 import { callMiMo, callMiMoStream, type ModelConfig } from '@/lib/mimo';
 import { scrapeWebsite } from '@/lib/website-scraper';
-import { archivePackageIfEnabled, buildWebsitePackage, formatPackageContext, gatePackageForStep } from '@/lib/website-package';
+import { archivePackageIfEnabled, buildWebsitePackage, decodeScreenshotDataUrl, formatPackageContext, gatePackageForStep } from '@/lib/website-package';
 import { applyLocalPaths, localizePackageAssetsIfEnabled, summarizeLocalize } from '@/lib/assets';
 import { describeValidationErrors, inspectWebsitePackage } from '@/lib/schemas';
 import {
@@ -1654,6 +1654,11 @@ export async function POST(request: NextRequest) {
         scraped: await getScraped(url),
         interaction: (await getInteraction(url)) ?? undefined,
         layout: (await getLayout(url)) ?? undefined,
+        // 截图入包（P1-06 / P1-10）：客户端把 heroBase64 随请求体传上来，
+        // 之前只喂给了 Vision 的图片通道，数据包里始终是空的 —— 结果计划书 §五
+        // 要求的 `screenshots/` 目录**永远不会被创建**。宽高由图片头真解析得出
+        // （解析失败就不入包，不编造尺寸）。
+        screenshot: decodeScreenshotDataUrl(screenshotBase64) ?? undefined,
       });
       // C2 闸门：契约违约必须显式拒绝（详见 lib/website-package/guard.ts）。
       // 这里只记日志不抛错 —— 真正的强制点在 code 步骤，规划阶段先保留可观测性。
@@ -1676,7 +1681,16 @@ export async function POST(request: NextRequest) {
         scraped: await getScraped(url),
         interaction: (await getInteraction(url)) ?? undefined,
         layout: (await getLayout(url)) ?? undefined,
+        // 真实 UI 路径下 code 步骤一定带截图（use-workflow 传 websiteScreenshot）。
+        screenshot: decodeScreenshotDataUrl(screenshotBase64) ?? undefined,
       });
+      // 归档升级（P1-06 / P1-10）：planning 已落过一份，但 planning 通常拿不到截图
+      // （客户端只在 vision/code/preview 传），所以 `screenshots/` 会是空的。
+      // 这里再落一次是**故意覆盖**：同一 generationId、同一目录、同一组文件名，
+      // 内容更完整（多了截图）。归档是显式开关，代价只有一次目录写入。
+      if (generationId) {
+        await archivePackageIfEnabled(codePkg, { jobId: generationId });
+      }
       // C2 强制入口：代码生成**必须**输入合法 Intelligence Package。
       // 契约违约 = 代码缺陷（buildWebsitePackage 理论上不可能产出违约包，见
       // verify:schema），因此这里拒绝执行而不是带着坏数据继续 —— 否则问题会被

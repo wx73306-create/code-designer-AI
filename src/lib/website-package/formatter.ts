@@ -85,6 +85,10 @@ export function formatPackageContext(
   const header = formatHeader(pkg);
   if (header) blocks.push(header);
 
+  // 截图段放在最前：它是「模型到底看见了什么」的索引，后面所有块都是在解释这张图。
+  const screenshots = formatScreenshots(pkg);
+  if (screenshots) blocks.push(screenshots);
+
   const structure = formatStructure(pkg);
   if (structure) blocks.push(structure);
 
@@ -183,6 +187,36 @@ function formatHeader(pkg: Partial<WebsitePackage>): string {
   }
 
   return lines.length > 0 ? ['### 概览', ...lines].join('\n') : '';
+}
+
+/**
+ * 截图段（P1-06 / P1-10，2026-09-26 补）。
+ *
+ * **绝不把 base64 写进提示词。** 一张 1280×800 的 PNG 有 1–3MB，
+ * 注进去会瞬间打爆上下文 —— 而且图片本身已经通过多模态的 `images[]` 通道给了模型，
+ * 文本里再来一份纯属浪费。
+ *
+ * 这一段的作用是**让日志说实话**：`gatePackageForStep` 的「已注入数据包块」
+ * 是拿「非空的块」推出来的，所以只要 `pkg.screenshots` 非空，
+ * 就必须真的有一段提示词与之对应，否则日志会声称注入了截图块而实际没有
+ * （这正是 P1-18 要防的「看着注入了其实没有」）。同时它顺带告诉模型：
+ * 后面那些色值/间距是**实测**数据，别去截图上估色。
+ */
+function formatScreenshots(pkg: Partial<WebsitePackage>): string {
+  const shots = pkg.screenshots ?? [];
+  if (shots.length === 0) return '';
+
+  const lines: string[] = [
+    '采集到的真实页面截图（**原图已通过图片通道提供**，此处只做声明，不含图像数据）：',
+  ];
+  for (const shot of shots) {
+    lines.push(`  - ${shot.viewport}: ${shot.width}×${shot.height} px`);
+  }
+  lines.push(
+    '  - 截图仅作**视觉参照**；色值、字号、间距请以 Design Tokens 与布局实测为准，不要凭截图估色。',
+  );
+
+  return ['### 参考截图', ...lines].join('\n');
 }
 
 function formatStructure(pkg: Partial<WebsitePackage>): string {
