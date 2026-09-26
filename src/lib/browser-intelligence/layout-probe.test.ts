@@ -37,6 +37,7 @@ function section(over: Partial<RawSection> = {}): RawSection {
     height: 100,
     width: 1440,
     textAlign: 'left',
+    zIndex: null,
     childCount: 0,
     childTops: [],
     ...over,
@@ -368,5 +369,54 @@ describe('probeLayout（FakePage 端到端）', () => {
 
     expect(result.flow).toEqual([]);
     expect(result.gridColumns).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// zIndex 层级采集（计划书 §四「元素坐标、尺寸、层级」）
+// ---------------------------------------------------------------------------
+
+describe('layout-probe · zIndex', () => {
+  it('实测到 z-index 数字时写入 flow[].zIndex', () => {
+    const result = buildLayoutResult(
+      raw([section({ tag: 'header', zIndex: 999, height: 60, top: 0 })]),
+    );
+    expect(result.flow).toHaveLength(1);
+    expect(result.flow[0].zIndex).toBe(999);
+  });
+
+  it('z-index: auto（null）时**不写字段** —— auto ≠ 0，不能编造测量值', () => {
+    const result = buildLayoutResult(
+      raw([section({ tag: 'header', zIndex: null, height: 60, top: 0 })]),
+    );
+    expect(result.flow).toHaveLength(1);
+    expect('zIndex' in result.flow[0]).toBe(false);
+    expect(result.flow[0].zIndex).toBeUndefined();
+  });
+
+  it('z-index: 0 必须保留为 0（0 是真实层级，不是「缺失」）', () => {
+    const result = buildLayoutResult(
+      raw([section({ tag: 'header', zIndex: 0, height: 60, top: 0 })]),
+    );
+    // 0 与缺失必须可区分 —— 这是本字段存在的全部意义
+    expect('zIndex' in result.flow[0]).toBe(true);
+    expect(result.flow[0].zIndex).toBe(0);
+  });
+
+  it('负 z-index 原样保留（跑到背景层是真实存在的布局手法）', () => {
+    const result = buildLayoutResult(
+      raw([section({ tag: 'div', zIndex: -1, height: 60, top: 0 })]),
+    );
+    expect(result.flow[0].zIndex).toBe(-1);
+  });
+
+  it('层级字段缺失时不影响其它字段（向后兼容老数据）', () => {
+    const legacy: RawSection = section({ tag: 'section', height: 300, top: 0 });
+    delete (legacy as { zIndex?: number | null }).zIndex;
+    const result = buildLayoutResult(raw([legacy]));
+
+    expect(result.flow[0].heightPx).toBe(300);
+    expect(result.flow[0].role).toBe('other');
+    expect('zIndex' in result.flow[0]).toBe(false);
   });
 });

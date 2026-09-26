@@ -70,6 +70,13 @@ export interface RawSection {
   width: number;
   /** `getComputedStyle(el).textAlign` 原文，归一化在 Node 侧做。 */
   textAlign: string;
+  /**
+   * `getComputedStyle(el).zIndex` 解析结果。
+   *
+   * `z-index: auto` 在计算样式里就是字符串 `'auto'`，此处**必须保留为 `null`**
+   * 而不是折算成 0 —— auto 与 0 是两种不同的层叠语义，折算等于编造测量值。
+   */
+  zIndex: number | null;
   /** 直接子元素总数（真实值，不受 childTops 截断影响）。 */
   childCount: number;
   /** 直接子元素的 top（文档绝对坐标）。用于 Node 侧算列数。 */
@@ -146,6 +153,12 @@ function collectGeometry(): RawLayoutProbe {
       ? `#${idAttr}`
       : (firstClass ? `${el.tagName.toLowerCase()}.${firstClass}` : el.tagName.toLowerCase());
 
+    // z-index：与 stickyHeader 同属「读计算样式」，不做层叠上下文的语义推断。
+    // 'auto' ⇒ null（不是 0）；解析不出数字也归 null。
+    const rawZ = style.zIndex;
+    const parsedZ = rawZ === 'auto' || rawZ === '' ? Number.NaN : Number.parseInt(rawZ, 10);
+    const zIndex = Number.isFinite(parsedZ) ? parsedZ : null;
+
     sections.push({
       selector,
       tag: el.tagName.toLowerCase(),
@@ -156,6 +169,7 @@ function collectGeometry(): RawLayoutProbe {
       height: Math.round(rect.height),
       width: Math.round(rect.width),
       textAlign: style.textAlign || '',
+      zIndex,
       childCount: kids.length,
       childTops,
     });
@@ -296,6 +310,12 @@ export function buildLayoutResult(
     heightWeight: docHeight > 0 ? Math.round((s.height / docHeight) * 100) : 0,
     heightPx: s.height,
     columns: countColumns(s.childTops, rowTolerance),
+    // z-index: auto 时**不写字段**（不是写 0）—— 见 RawSection.zIndex 的说明。
+    // 判据用 `typeof === 'number'` 而不是 `!== null`：老版本采集结果（或将来
+    // 换引擎的适配层）会**整个缺字段**，此时 `s.zIndex` 是 undefined；
+    // 只判 null 会让它掉进 else 分支写出 `zIndex: undefined`，
+    // 使 `'zIndex' in block` 恒为 true —— 「缺失即 auto」的语义当场失效。
+    ...(typeof s.zIndex === 'number' && Number.isFinite(s.zIndex) ? { zIndex: s.zIndex } : {}),
     alignment: normalizeAlignment(s.textAlign),
     fullBleed: s.width >= raw.viewport.width * fullBleedRatio,
   }));

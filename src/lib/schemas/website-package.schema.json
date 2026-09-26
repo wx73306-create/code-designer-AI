@@ -1,0 +1,288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://code-designer.ai/schemas/website-package.schema.json",
+  "title": "Website Intelligence Package",
+  "description": "模块间通信的唯一标准契约（C1）。所有 Agent 之间只允许通过本结构通信，禁止塞临时对象。版本 1.2.0。",
+  "type": "object",
+  "required": [
+    "url",
+    "capturedAt",
+    "version",
+    "screenshots",
+    "assets",
+    "dom",
+    "styles",
+    "layout",
+    "design",
+    "components",
+    "animations",
+    "metadata"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "url": { "type": "string", "minLength": 1 },
+    "capturedAt": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "minLength": 1 },
+    "screenshots": { "type": "array", "items": { "$ref": "#/$defs/screenshot" } },
+    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
+    "dom": { "$ref": "#/$defs/domAnalysis" },
+    "styles": { "$ref": "#/$defs/styleAnalysis" },
+    "layout": { "$ref": "#/$defs/layoutAnalysis" },
+    "design": { "$ref": "#/$defs/designSystem" },
+    "components": { "$ref": "#/$defs/componentPlan" },
+    "animations": { "type": "array", "items": { "$ref": "#/$defs/animationData" } },
+    "metadata": { "$ref": "#/$defs/pageMetadata" },
+    "interaction": { "$ref": "#/$defs/interactionPackage" }
+  },
+
+  "$defs": {
+    "screenshot": {
+      "type": "object",
+      "required": ["viewport", "width", "height"],
+      "additionalProperties": true,
+      "properties": {
+        "viewport": { "type": "string", "minLength": 1 },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "dataUrl": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+
+    "asset": {
+      "type": "object",
+      "required": ["type", "url"],
+      "additionalProperties": true,
+      "properties": {
+        "type": { "enum": ["image", "svg", "font", "icon"] },
+        "url": { "type": "string", "minLength": 1 },
+        "localPath": {
+          "type": "string",
+          "description": "Path relative to website-package/ after localization; downstream must prefer this over url so generated projects never hotlink."
+        },
+        "mimeType": { "type": "string" },
+        "size": { "type": "number", "minimum": 0 },
+        "role": { "type": "string" },
+        "hash": { "type": "string", "description": "sha256 of the localized bytes." },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+
+    "sectionRole": {
+      "enum": ["hero", "nav", "content", "feature", "product", "pricing", "testimonial", "cta", "footer", "other"]
+    },
+
+    "sectionInfo": {
+      "type": "object",
+      "required": ["name", "tag", "height", "layout", "children", "role"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "tag": { "type": "string" },
+        "height": { "type": "string" },
+        "layout": { "type": "string" },
+        "children": { "type": "array", "items": { "type": "string" } },
+        "role": { "$ref": "#/$defs/sectionRole" }
+      }
+    },
+
+    "domAnalysis": {
+      "type": "object",
+      "required": ["pageType", "sections", "layout", "responsive", "structure"],
+      "additionalProperties": true,
+      "properties": {
+        "pageType": { "type": "string" },
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/sectionInfo" } },
+        "layout": { "type": "string" },
+        "responsive": { "type": "boolean" },
+        "structure": { "type": "string" }
+      }
+    },
+
+    "colorInfo": {
+      "type": "object",
+      "required": ["hex", "role", "usage"],
+      "additionalProperties": true,
+      "properties": {
+        "hex": { "type": "string" },
+        "role": { "enum": ["primary", "secondary", "accent", "background", "text", "border"] },
+        "usage": { "type": "string" }
+      }
+    },
+
+    "fontInfo": {
+      "type": "object",
+      "required": ["family", "weights", "sizes", "role"],
+      "additionalProperties": true,
+      "properties": {
+        "family": { "type": "string" },
+        "weights": { "type": "array", "items": { "type": "number" } },
+        "sizes": { "type": "array", "items": { "type": "string" } },
+        "role": { "enum": ["heading", "body", "mono", "ui"] }
+      }
+    },
+
+    "spacingInfo": {
+      "type": "object",
+      "required": ["base", "scale", "containerMaxWidth", "sectionPadding"],
+      "additionalProperties": true,
+      "properties": {
+        "base": { "type": "string" },
+        "scale": { "type": "array", "items": { "type": "string" } },
+        "containerMaxWidth": { "type": "string" },
+        "sectionPadding": { "type": "string" }
+      }
+    },
+
+    "styleAnalysis": {
+      "type": "object",
+      "required": ["colors", "fonts", "spacing", "shadows", "borderRadius", "transitions", "cssVariables"],
+      "additionalProperties": true,
+      "properties": {
+        "colors": { "type": "array", "items": { "$ref": "#/$defs/colorInfo" } },
+        "fonts": { "type": "array", "items": { "$ref": "#/$defs/fontInfo" } },
+        "spacing": { "$ref": "#/$defs/spacingInfo" },
+        "shadows": { "type": "array", "items": { "type": "string" } },
+        "borderRadius": { "type": "array", "items": { "type": "string" } },
+        "transitions": { "type": "array", "items": { "type": "string" } },
+        "cssVariables": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+
+    "layoutBlock": {
+      "type": "object",
+      "required": ["role", "heightWeight", "columns", "alignment", "fullBleed"],
+      "additionalProperties": true,
+      "properties": {
+        "role": { "$ref": "#/$defs/sectionRole" },
+        "heightWeight": { "type": "number", "minimum": 0, "maximum": 100 },
+        "heightPx": { "type": "number", "minimum": 0 },
+        "columns": { "type": "number", "minimum": 0 },
+        "zIndex": { "type": "number" },
+        "alignment": { "enum": ["left", "center", "right"] },
+        "fullBleed": { "type": "boolean" }
+      }
+    },
+
+    "layoutAnalysis": {
+      "type": "object",
+      "required": ["flow", "breakpoints", "gridColumns", "stickyHeader", "centered"],
+      "additionalProperties": true,
+      "properties": {
+        "flow": { "type": "array", "items": { "$ref": "#/$defs/layoutBlock" } },
+        "breakpoints": { "type": "array", "items": { "type": "string" } },
+        "gridColumns": { "type": "number", "minimum": 0 },
+        "gap": { "type": "string" },
+        "stickyHeader": { "type": "boolean" },
+        "centered": { "type": "boolean" }
+      }
+    },
+
+    "pageMetadata": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": true,
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "language": { "type": "string" },
+        "dir": { "enum": ["ltr", "rtl"] },
+        "favicon": { "type": "string" },
+        "openGraph": { "type": "object", "additionalProperties": { "type": "string" } },
+        "canonical": { "type": "string" },
+        "brand": { "type": "string" }
+      }
+    },
+
+    "designSystem": {
+      "type": "object",
+      "required": [
+        "style",
+        "brand",
+        "visualLanguage",
+        "colorPalette",
+        "typography",
+        "spacingScale",
+        "componentPatterns",
+        "animationStyle"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "style": { "type": "string" },
+        "brand": { "type": "string" },
+        "visualLanguage": { "type": "string" },
+        "colorPalette": { "type": "object", "additionalProperties": { "type": "string" } },
+        "typography": { "type": "object", "additionalProperties": { "type": "string" } },
+        "spacingScale": { "type": "array", "items": { "type": "string" } },
+        "componentPatterns": { "type": "array", "items": { "type": "string" } },
+        "animationStyle": { "type": "string" }
+      }
+    },
+
+    "componentNode": {
+      "type": "object",
+      "required": ["name", "type", "children"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "children": { "type": "array", "items": { "$ref": "#/$defs/componentNode" } },
+        "props": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+
+    "componentFile": {
+      "type": "object",
+      "required": ["filename", "component", "dependencies"],
+      "additionalProperties": true,
+      "properties": {
+        "filename": { "type": "string" },
+        "component": { "type": "string" },
+        "dependencies": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "componentPlan": {
+      "type": "object",
+      "required": ["tree", "files", "totalComponents"],
+      "additionalProperties": true,
+      "properties": {
+        "tree": { "type": "array", "items": { "$ref": "#/$defs/componentNode" } },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/componentFile" } },
+        "totalComponents": { "type": "number", "minimum": 0 }
+      }
+    },
+
+    "animationData": {
+      "type": "object",
+      "required": ["name", "type", "duration", "easing", "target"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "enum": ["transition", "keyframe", "scroll", "hover", "entrance"] },
+        "duration": { "type": "string" },
+        "easing": { "type": "string" },
+        "target": { "type": "string" },
+        "properties": { "type": "array", "items": { "type": "string" } },
+        "delay": { "type": "string" },
+        "infinite": { "type": "boolean" },
+        "uncertain": { "type": "boolean" }
+      }
+    },
+
+    "interactionPackage": {
+      "description": "Phase 1 采集层产物。契约在 src/lib/browser-intelligence/types.ts 冻结（InteractionPackage），此处镜像其五个顶层容器；数组**元素**的细结构刻意不校验 —— 那是采集层自己的单测职责，在这里重复一遍只会让两处定义漂移。",
+      "type": "object",
+      "required": ["scrolls", "clicks", "states", "animations", "meta"],
+      "additionalProperties": true,
+      "properties": {
+        "scrolls": { "type": "array" },
+        "clicks": { "type": "array" },
+        "states": { "type": "array" },
+        "animations": { "type": "array" },
+        "meta": { "type": "object" }
+      }
+    }
+  }
+}

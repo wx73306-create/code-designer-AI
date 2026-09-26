@@ -52,6 +52,18 @@ function blockHeight(block: LayoutBlock): string {
     : `${block.heightWeight}%`;
 }
 
+/**
+ * 区块层叠描述：`z=999`。
+ *
+ * `zIndex` 为 1.3.0 新增的**可选**字段，且 `undefined` 有确切含义 ——
+ * `z-index: auto`（未建立层叠上下文），与 `z-index: 0` 不同。
+ * 因此缺失时**整段不输出**，绝不折算成 0：把 auto 说成 0 会让模型以为
+ * 该区块被显式压在第 0 层，从而生成多余的 `z-index: 0`。
+ */
+function blockStacking(block: LayoutBlock): string {
+  return block.zIndex !== undefined ? ` · z=${block.zIndex}` : '';
+}
+
 // ---------------------------------------------------------------------------
 // Full context
 // ---------------------------------------------------------------------------
@@ -177,10 +189,10 @@ function formatStructure(pkg: Partial<WebsitePackage>): string {
   const lines: string[] = [];
 
   if (pkg.layout?.flow?.length) {
-    lines.push('页面纵向构成（role · 视觉占比与实测像素高 · 列数 · 对齐 · 是否通栏）：');
+    lines.push('页面纵向构成（role · 视觉占比与实测像素高 · 列数 · 对齐 · 是否通栏 · 层叠）：');
     for (const block of pkg.layout.flow.slice(0, LIMITS.flow)) {
       lines.push(
-        `  - ${block.role}: ${blockHeight(block)} · ${block.columns}列 · ${block.alignment} 对齐${block.fullBleed ? ' · 通栏' : ''}`,
+        `  - ${block.role}: ${blockHeight(block)} · ${block.columns}列 · ${block.alignment} 对齐${block.fullBleed ? ' · 通栏' : ''}${blockStacking(block)}`,
       );
     }
     // 像素高度只在实测时才存在 —— 顺带告诉模型「文档总高」这个参照系，
@@ -262,12 +274,42 @@ function formatTokens(pkg: Partial<WebsitePackage>): string {
   return lines.length > 0 ? ['### Design Tokens', ...lines].join('\n') : '';
 }
 
+/**
+ * 资源块（P2-03 ② 的消费端）。
+ *
+ * 约定：**有 `localPath` 就只写本地路径，不再给原 URL。**
+ * 给两个路径等于把选择权丢回给模型 —— 而模型没有任何理由不选那个长得更
+ * 眼熟的原始 URL，于是又热链回去。所以这里不提供选项，只提供答案。
+ *
+ * 缺 `localPath` 的（资源本地化未开启）才退回原 URL，并显式标注这是外链、
+ * 不可依赖 —— 让「没本地化的后果」在提示词里也可见。
+ */
 function formatAssets(pkg: Partial<WebsitePackage>): string {
   if (!pkg.assets?.length) return '';
 
   const lines = ['### 资源'];
   for (const a of pkg.assets.slice(0, LIMITS.assets)) {
-    lines.push(`  - ${a.type}${a.role ? ` (${a.role})` : ''}: ${a.url}`);
+    const head = `  - ${a.type}${a.role ? ` (${a.role})` : ''}`;
+    if (a.localPath) {
+      const dims = typeof a.width === 'number' && typeof a.height === 'number' ? ` ${a.width}×${a.height}` : '';
+      lines.push(`${head}: ${a.localPath}${dims} ⬅ 必须引用此本地路径`);
+    } else {
+      lines.push(`${head}: ${a.url} ⚠️ 外链，不可依赖`);
+    }
+  }
+
+  const missing = pkg.assets.filter((a) => !a.localPath);
+  if (missing.length === 0) {
+    const placeholders = pkg.assets.filter((a) => a.localPath?.includes('placeholders/')).length;
+    lines.push('');
+    lines.push('  所有资源均已本地化：**禁止**在产物里出现任何指向原站的资源 URL。');
+    if (placeholders > 0) {
+      lines.push(`  其中 ${placeholders} 个是本地占位图（原图不可达/防盗链），保持其尺寸即可，不要试图还原内容。`);
+    }
+  } else {
+    lines.push('');
+    lines.push(`  ⚠️ 有 ${missing.length} 个资源未本地化（未开启资源本地化）。这些 URL 随时可能失效，`);
+    lines.push('     使用时必须提供降级样式（如背景色 / aspect-ratio 占位），不得作为页面唯一内容。');
   }
 
   return lines.join('\n');

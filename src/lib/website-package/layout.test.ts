@@ -26,6 +26,7 @@ import type { ScrapedDesignData } from '@/lib/website-scraper';
 import type { LayoutProbeResult } from '@/lib/browser-intelligence/layout-probe';
 import { WEBSITE_PACKAGE_VERSION } from '@/types/website-package';
 import { buildWebsitePackage } from './adapter';
+import { formatPackageContext } from './formatter';
 
 const SCRAPED: Partial<ScrapedDesignData> = {
   url: 'https://example.com',
@@ -136,8 +137,9 @@ describe('传入实测 layout 时', () => {
 // ---------------------------------------------------------------------------
 
 describe('协议', () => {
-  it('版本为 1.2.0', () => {
-    expect(WEBSITE_PACKAGE_VERSION).toBe('1.2.0');
+  // 1.2.0 = LayoutBlock.heightPx；1.3.0 = LayoutBlock.zIndex
+  it('版本为 1.3.0', () => {
+    expect(WEBSITE_PACKAGE_VERSION).toBe('1.3.0');
   });
 
   it('老数据无 heightPx 字段时不受影响（向后兼容）', () => {
@@ -165,5 +167,42 @@ describe('协议', () => {
     expect(pkg.layout.breakpoints).toEqual([]);
     expect(typeof pkg.layout.stickyHeader).toBe('boolean');
     expect(typeof pkg.layout.centered).toBe('boolean');
+  });
+});
+
+// ===========================================================================
+// zIndex 渲染（1.3.0）—— 层级必须真的出现在提示词里，否则采了也白采
+// ===========================================================================
+
+describe('formatter · 层叠层级渲染', () => {
+  function pkgWithZ(zIndex: number | undefined) {
+    const flow = [
+      {
+        role: 'nav' as const,
+        heightWeight: 5,
+        heightPx: 64,
+        columns: 1,
+        alignment: 'left' as const,
+        fullBleed: true,
+        ...(zIndex === undefined ? {} : { zIndex }),
+      },
+    ];
+    const built = buildWebsitePackage({ scraped: SCRAPED, layout: probe({ flow }) });
+    return formatPackageContext(built);
+  }
+
+  it('有 zIndex 时输出 `z=999`', () => {
+    expect(pkgWithZ(999)).toContain('z=999');
+  });
+
+  it('z-index: 0 也必须输出 `z=0`（0 是真的层级，不能被当成缺失吞掉）', () => {
+    expect(pkgWithZ(0)).toContain('z=0');
+  });
+
+  it('auto（字段缺失）时整段不输出，绝不折算成 z=0', () => {
+    const text = pkgWithZ(undefined);
+    expect(text).not.toContain('z=');
+    // 区块行本身仍然要正常渲染
+    expect(text).toContain('nav:');
   });
 });

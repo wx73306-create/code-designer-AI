@@ -95,8 +95,9 @@ function samplePackage(): InteractionPackage {
 
 describe('WebsitePackage 协议版本', () => {
   // 1.1.0 = Sprint 3 加 interaction；1.2.0 = Sprint A 加 LayoutBlock.heightPx
-  it('版本已 bump 到 1.2.0', () => {
-    expect(WEBSITE_PACKAGE_VERSION).toBe('1.2.0');
+  // 1.3.0 = 加 LayoutBlock.zIndex（实测层叠层级，auto ⇒ 缺失）
+  it('版本已 bump 到 1.3.0', () => {
+    expect(WEBSITE_PACKAGE_VERSION).toBe('1.3.0');
   });
 
   it('createEmptyPackage 的 interaction 必须是 undefined，不是空对象', () => {

@@ -1,0 +1,290 @@
+{
+  "url": "https://stripe.com",
+  "capturedAt": "2026-09-26T08:00:00.000Z",
+  "version": "1.3.0",
+  "screenshots": [
+    {
+      "viewport": "desktop",
+      "width": 1440,
+      "height": 900,
+      "dataUrl": "data:image/png;base64,iVBORw0KGgo=",
+      "description": "首屏"
+    }
+  ],
+  "assets": [
+    {
+      "type": "image",
+      "url": "https://stripe.com/img/hero.png",
+      "mimeType": "image/png",
+      "size": 84213,
+      "role": "hero"
+    },
+    {
+      "type": "svg",
+      "url": "https://stripe.com/logo.svg",
+      "role": "logo"
+    }
+  ],
+  "dom": {
+    "pageType": "landing",
+    "sections": [
+      {
+        "name": "nav",
+        "tag": "nav",
+        "height": "64px",
+        "layout": "flexbox",
+        "children": [],
+        "role": "nav"
+      },
+      {
+        "name": "hero",
+        "tag": "section",
+        "height": "685px",
+        "layout": "block",
+        "children": [],
+        "role": "hero"
+      },
+      {
+        "name": "footer",
+        "tag": "footer",
+        "height": "320px",
+        "layout": "css-grid",
+        "children": [],
+        "role": "footer"
+      }
+    ],
+    "layout": "flexbox",
+    "responsive": true,
+    "structure": "<nav></nav><section></section><footer></footer>"
+  },
+  "styles": {
+    "colors": [
+      {
+        "hex": "#635bff",
+        "role": "primary",
+        "usage": "主按钮与品牌色"
+      },
+      {
+        "hex": "#0a2540",
+        "role": "text",
+        "usage": "正文标题"
+      }
+    ],
+    "fonts": [
+      {
+        "family": "sohne-var",
+        "weights": [
+          400,
+          500,
+          700
+        ],
+        "sizes": [
+          "16px",
+          "48px"
+        ],
+        "role": "heading"
+      }
+    ],
+    "spacing": {
+      "base": "4px",
+      "scale": [
+        "4px",
+        "8px",
+        "16px",
+        "32px"
+      ],
+      "containerMaxWidth": "1080px",
+      "sectionPadding": "80px"
+    },
+    "shadows": [
+      "0 2px 8px rgba(0,0,0,0.08)"
+    ],
+    "borderRadius": [
+      "8px"
+    ],
+    "transitions": [
+      "all 0.2s ease"
+    ],
+    "cssVariables": {
+      "--brand": "#635bff"
+    }
+  },
+  "layout": {
+    "flow": [
+      {
+        "role": "hero",
+        "heightWeight": 42,
+        "heightPx": 685,
+        "columns": 1,
+        "zIndex": 0,
+        "alignment": "center",
+        "fullBleed": true
+      }
+    ],
+    "breakpoints": [
+      "768px",
+      "1024px"
+    ],
+    "gridColumns": 12,
+    "gap": "24px",
+    "stickyHeader": true,
+    "centered": true
+  },
+  "design": {
+    "style": "modern-minimal",
+    "brand": "Stripe",
+    "visualLanguage": "品牌紫 + 大留白 + 渐变斜切",
+    "colorPalette": {
+      "primary": "#635bff"
+    },
+    "typography": {
+      "heading": "sohne-var 700"
+    },
+    "spacingScale": [
+      "4px",
+      "8px",
+      "16px"
+    ],
+    "componentPatterns": [
+      "gradient-hero",
+      "card-with-shadow"
+    ],
+    "animationStyle": "subtle-fade-up"
+  },
+  "components": {
+    "tree": [
+      {
+        "name": "HeroSection",
+        "type": "section",
+        "children": [],
+        "props": {
+          "title": "string"
+        }
+      }
+    ],
+    "files": [
+      {
+        "filename": "HeroSection.tsx",
+        "component": "HeroSection",
+        "dependencies": []
+      }
+    ],
+    "totalComponents": 1
+  },
+  "animations": [
+    {
+      "name": "hero-fade-up",
+      "type": "entrance",
+      "duration": "0.6s",
+      "easing": "power2.out",
+      "target": ".hero-title",
+      "properties": [
+        "opacity",
+        "transform"
+      ]
+    }
+  ],
+  "metadata": {
+    "title": "Stripe",
+    "brand": "Stripe",
+    "language": "en",
+    "dir": "ltr"
+  },
+  "interaction": {
+    "scrolls": [
+      {
+        "type": "scroll",
+        "index": 0,
+        "position": 0,
+        "documentHeight": 4820,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "sectionHint": "hero",
+        "screenshot": {
+          "id": "scroll-00",
+          "filename": "scroll-00.png",
+          "width": 1440,
+          "height": 900
+        },
+        "timestamp": 0
+      }
+    ],
+    "clicks": [
+      {
+        "type": "click",
+        "id": "click-001",
+        "target": {
+          "selector": "nav .products",
+          "text": "Products",
+          "kind": "nav"
+        },
+        "before": {
+          "id": "state-001",
+          "filename": "state-001.png",
+          "width": 1440,
+          "height": 900
+        },
+        "after": {
+          "id": "state-002-menu-open",
+          "filename": "state-002-menu-open.png",
+          "width": 1440,
+          "height": 900
+        },
+        "changed": true,
+        "changes": [
+          {
+            "type": "visibility",
+            "target": ".mega-menu",
+            "change": "hidden→visible",
+            "detail": {
+              "opacity": "0→1",
+              "transform": "translateY(-8px)→none"
+            }
+          }
+        ],
+        "timestamp": 1200
+      }
+    ],
+    "states": [
+      {
+        "stateId": "home",
+        "label": "首屏",
+        "trigger": {
+          "type": "initial"
+        },
+        "screenshot": {
+          "id": "state-000",
+          "filename": "state-000.png",
+          "width": 1440,
+          "height": 900
+        }
+      }
+    ],
+    "animations": [
+      {
+        "trigger": {
+          "type": "click",
+          "selector": "nav .products",
+          "text": "Products"
+        },
+        "properties": [
+          "opacity",
+          "transform"
+        ],
+        "duration": "0.2s",
+        "easing": "ease-out"
+      }
+    ],
+    "meta": {
+      "capturedAt": "2026-09-26T08:00:05.000Z",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "documentHeight": 4820,
+      "screenshotCount": 3
+    }
+  }
+}

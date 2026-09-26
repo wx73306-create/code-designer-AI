@@ -102,7 +102,12 @@ export interface AssetData {
   type: 'image' | 'svg' | 'font' | 'icon';
   /** Original URL (or synthetic identifier for inline assets). */
   url: string;
-  /** Local filesystem path after the asset has been downloaded. */
+  /**
+   * Local path **relative to `website-package/`** after localization
+   * (e.g. `assets/ab12….png`, or `assets/placeholders/…svg` when the original
+   * was unreachable). Downstream (formatter / generator) must prefer this over
+   * `url` — the whole point of P2-03 is that generated projects never hotlink.
+   */
   localPath?: string;
   /** MIME type when known. */
   mimeType?: string;
@@ -110,6 +115,12 @@ export interface AssetData {
   size?: number;
   /** Semantic role inferred from the asset context (e.g. `'logo'`, `'hero'`). */
   role?: string;
+  /** sha256 of the localized bytes (P2-03 manifest requirement). */
+  hash?: string;
+  /** Pixel width of the original asset, when parseable. Absent = not measured. */
+  width?: number;
+  /** Pixel height of the original asset, when parseable. Absent = not measured. */
+  height?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +215,18 @@ export interface LayoutBlock {
   heightPx?: number;
   /** Number of columns this block lays its children out in. */
   columns: number;
+  /**
+   * 实测的 CSS `z-index`。
+   *
+   * **刻意是可选的，且 `undefined` 有确切含义**：`z-index: auto`（未建立层叠上下文）
+   * 与 `z-index: 0` 在浏览器里是**不同**的两件事 —— 前者随层叠顺序浮动，后者显式
+   * 压在第 0 层。把 auto 写成 0 就是编造测量值（与 `heightPx` 同一原则）。
+   * 因此 auto ⇒ 字段缺失，而非 0。
+   *
+   * 存在理由：计划书 §四 要求采集「元素坐标、尺寸、**层级**」，而层级信息是
+   * 判断「吸顶导航盖住 hero」这类还原失真的直接依据。
+   */
+  zIndex?: number;
   /** Text block alignment within the section. */
   alignment: 'left' | 'center' | 'right';
   /** Whether this section spans the full viewport width (edge-to-edge). */
@@ -391,11 +414,12 @@ export interface AnimationData {
 /**
  * Current schema version — bump on any breaking change to {@link WebsitePackage}.
  *
+ * 1.3.0：`LayoutBlock` 新增可选字段 `zIndex`（实测层叠层级，`auto` ⇒ 缺失）。
  * 1.2.0（Phase 2 Sprint A）：`LayoutBlock` 新增可选字段 `heightPx`（实测像素高度）。
  * 1.1.0（Phase 1 Sprint 3）：新增可选字段 `interaction`。
  * 均属 minor —— 老数据反序列化后该字段为 `undefined`，既有消费方不受影响。
  */
-export const WEBSITE_PACKAGE_VERSION = '1.2.0';
+export const WEBSITE_PACKAGE_VERSION = '1.3.0';
 
 /**
  * Create a fully-populated skeleton package.
