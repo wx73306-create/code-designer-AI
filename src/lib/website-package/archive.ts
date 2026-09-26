@@ -41,6 +41,7 @@ import {
   runArtifactsRoot,
   sanitizeJobId,
 } from '@/lib/run-artifacts';
+import { parseImageSize, type ParsedImageSize } from '@/lib/assets/image-size';
 import { WEBSITE_PACKAGE_VERSION, type ScreenshotData, type WebsitePackage } from '@/types/website-package';
 
 /**
@@ -75,6 +76,69 @@ export function parseDataUrl(dataUrl: string): MimeParts | null {
     : mime === 'image/webp' ? 'webp'
     : 'png';
   return { ext, mime };
+}
+
+/** 图片头识别出的格式 → 文件扩展名。 */
+const FORMAT_EXT: Record<ParsedImageSize['format'], string> = {
+  png: 'png',
+  jpeg: 'jpg',
+  gif: 'gif',
+  bmp: 'bmp',
+  webp: 'webp',
+  svg: 'svg',
+};
+
+export interface ImagePayload {
+  ext: string;
+  bytes: Buffer;
+}
+
+/**
+ * 把截图负载解成「扩展名 + 字节」。
+ *
+ * **必须同时支持两种形态** —— 这不是过度设计，是真机打脸后的结论：
+ *
+ *   · `data:image/png;base64,iVBOR…`  数据 URL 形态（前端上传 / 测试里一直用的）
+ *   · `iVBOR…`                        **裸 base64**（真实生产者形态）
+ *
+ * `src/lib/screenshot.ts` 的 `heroBase64` 注释写得很清楚：*without data URI prefix*。
+ * 而这里原先只认带前缀的 data URL，于是 `/api/mimo` 传上来的裸 base64 会被
+ * **静默跳过**：闸门日志说 `screenshots` 块非空（模型确实收到了图），
+ * 磁盘上却连 `screenshots/` 目录都不存在。**2026-09-26 真机验证抓到的。**
+ *
+ * 扩展名优先取 data URL 的 MIME；没有 MIME 时用**图片头**识别。
+ * 两者都拿不到就返回 `null`（宁可没有文件，也不写一个后缀骗人的文件）。
+ */
+export function decodeImagePayload(input: unknown): ImagePayload | null {
+  if (typeof input !== 'string') return null;
+  const raw = input.trim();
+  if (!raw) return null;
+
+  const isDataUrl = raw.startsWith('data:');
+  let b64 = raw;
+  if (isDataUrl) {
+    const comma = raw.indexOf(',');
+    if (comma < 0) return null;
+    // 只认 base64 编码的 data URL；`data:image/svg+xml,<svg…>` 这种明文形式解不出来。
+    if (!/;base64,/i.test(raw.slice(0, comma + 1))) return null;
+    b64 = raw.slice(comma + 1);
+  }
+  if (!b64) return null;
+
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(b64, 'base64');
+  } catch {
+    return null;
+  }
+  if (bytes.length === 0) return null;
+
+  const fromMime = isDataUrl ? parseDataUrl(raw) : null;
+  const size = parseImageSize(bytes);
+  const ext = fromMime?.ext ?? (size ? FORMAT_EXT[size.format] : null);
+  if (!ext) return null;
+
+  return { ext, bytes };
 }
 
 export interface ArchiveOptions {
@@ -132,20 +196,29 @@ export async function archiveWebsitePackage(
     };
 
     // ---- screenshots/：base64 → 真实图片文件 ----
+    // 注意：负载可能是裸 base64（真实生产者）或 data URL（测试/前端）——
+    // 见 decodeImagePayload 的头注释，这里曾经因此静默丢过整批截图。
     const archivedScreenshots: ArchivedScreenshot[] = [];
     for (const [i, shot] of (pkg.screenshots ?? []).entries()) {
       const { dataUrl, ...rest } = shot;
-      const parsed = dataUrl ? parseDataUrl(dataUrl) : null;
-      if (!dataUrl || !parsed) {
+      const payload = dataUrl ? decodeImagePayload(dataUrl) : null;
+      if (!payload) {
+        // **不再静默**：以前这里直接 continue，结果「有没有写进文件」在
+        // manifest 里看不出来，直到有人去数目录才发现 screenshots/ 根本没建。
+        if (dataUrl) {
+          console.warn(
+            `[PackageArchive] ⚠️ 截图无法解码，只登记元数据不写文件：viewport=${shot.viewport} ` +
+              `payloadLen=${dataUrl.length}`,
+          );
+        }
         archivedScreenshots.push(rest);
         continue;
       }
       const base = `${String(i).padStart(2, '0')}-${sanitizeJobId(shot.viewport) || 'viewport'}`;
-      const rel = `screenshots/${base}.${parsed.ext}`;
-      const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
-      await write(rel, Buffer.from(b64, 'base64'));
+      const rel = `screenshots/${base}.${payload.ext}`;
+      await write(rel, payload.bytes);
       // package.json 里留引用，不留 base64（见文件头的约定 1）
-      archivedScreenshots.push({ ...rest, file: `${base}.${parsed.ext}` });
+      archivedScreenshots.push({ ...rest, file: `${base}.${payload.ext}` });
     }
 
     // ---- package.json：完整包，但截图换成文件引用 ----

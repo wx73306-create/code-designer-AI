@@ -25,8 +25,9 @@ export {
   archiveRoot,
   sanitizeJobId,
   parseDataUrl,
+  decodeImagePayload,
 } from './archive';
-export type { ArchiveOptions, ArchiveResult } from './archive';
+export type { ArchiveOptions, ArchiveResult, ImagePayload } from './archive';
 
 /** 交互产物 → InteractionPackage 的归一化入口（Agent 不直接读 interaction.json）。 */
 export { buildInteractionPackage, RESTORED_FROM_EXPORT } from './interaction-adapter';

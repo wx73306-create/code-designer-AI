@@ -100,7 +100,7 @@ describe('archiveWebsitePackage · 目录标准（执行计划书 §五）', () 
   });
 });
 
-describe('archiveWebsitePackage · base64 必须剥离', () => {
+describe('archiveWebsitePackage · base64 剥离 + 两种负载形态', () => {
   it('截图落成真实图片文件，package.json 里不含 base64', async () => {
     // 1x1 PNG
     const dataUrl =
@@ -134,6 +134,65 @@ describe('archiveWebsitePackage · base64 必须剥离', () => {
     );
     expect(archived.screenshots[0]).toMatchObject({ viewport: 'mobile', width: 390 });
     expect(archived.screenshots[0].file).toBeUndefined();
+  });
+
+  /**
+   * 【真机回归】2026-09-26：把新镜像切上生产、跑真实生成后**去数目录**才发现
+   * `screenshots/` 根本没被创建。原因是本文件原先只认 `data:…;base64,`，
+   * 而真实生产者给的是**裸 base64** —— `src/lib/screenshot.ts` 的 `heroBase64`
+   * 注释写得很清楚：*without data URI prefix*。
+   *
+   * 上面那个用例之所以一直绿，是因为**测试喂的形态和生产喂的形态不一样**。
+   * 这三条用例就是为此加的：形态必须覆盖真实生产者。
+   */
+  it('【真机回归】裸 base64（真实生产者形态）也必须落成图片文件', async () => {
+    const bare =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const p = pkg();
+    p.screenshots = [{ viewport: 'desktop', width: 1, height: 1, dataUrl: bare }];
+
+    const r = await archiveWebsitePackage(p, { jobId: 'job-bare', root });
+    expect(r.ok).toBe(true);
+
+    const dir = path.join(root, 'job-bare', 'website-package');
+    expect(await exists(path.join(dir, 'screenshots/00-desktop.png'))).toBe(true);
+
+    const archived = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8'));
+    expect(archived.screenshots[0].file).toBe('00-desktop.png');
+    expect(archived.screenshots[0].dataUrl).toBeUndefined();
+  });
+
+  it('裸 base64 的扩展名来自**图片头**，不是硬编码 png', async () => {
+    const gif = Buffer.alloc(10);
+    gif.write('GIF89a', 0, 'ascii');
+    gif.writeUInt16LE(320, 6);
+    gif.writeUInt16LE(200, 8);
+    const p = pkg();
+    p.screenshots = [{ viewport: 'desktop', width: 320, height: 200, dataUrl: gif.toString('base64') }];
+
+    await archiveWebsitePackage(p, { jobId: 'job-gif', root });
+
+    expect(await exists(path.join(root, 'job-gif', 'website-package', 'screenshots/00-desktop.gif')))
+      .toBe(true);
+  });
+
+  it('既不是 data URL 也不是已知图片格式 → 不写文件，但不静默（元数据保留）', async () => {
+    const p = pkg();
+    p.screenshots = [{
+      viewport: 'desktop',
+      width: 10,
+      height: 10,
+      dataUrl: Buffer.from('not an image at all').toString('base64'),
+    }];
+
+    await archiveWebsitePackage(p, { jobId: 'job-junk', root });
+
+    const dir = path.join(root, 'job-junk', 'website-package');
+    expect(await exists(path.join(dir, 'screenshots'))).toBe(false);
+    const archived = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8'));
+    // 登记了元数据但明确没有 file —— 「有截图但写不出来」是可见的，不再被吞掉
+    expect(archived.screenshots[0].file).toBeUndefined();
+    expect(archived.screenshots[0].viewport).toBe('desktop');
   });
 });
 
