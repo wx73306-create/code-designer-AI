@@ -258,6 +258,14 @@ flowchart LR
   已修：`undefined ≡ 缺失` + `verify:schema` 改为校验**真实生产者输出** + `PACKAGE_GATE=warn` 逃生阀 +
   容器内 `/app/runs` 属主修正。
   **规范：任何 fail-closed 闸门进主链路前，必须先拿真实生产者输出过一遍验收脚本。**
+- **同一天抓到的第二例（同一根因）**：计划书 §五 的 `screenshots/` 一直是**声明而非实现** ——
+  截图只喂进了 Vision 的图片通道，`buildWebsitePackage()` 从未收到它；
+  补上「截图入包」后真机验证又发现**归档只认 `data:` 前缀的 data URL**，
+  而真实生产者给的是**裸 base64**（`heroBase64` 注释：*without data URI prefix*），
+  于是每张截图都被静默跳过 —— 闸门日志说 `screenshots` 块非空，磁盘上连目录都没有。
+  已修：`decodeImagePayload()` 同时接受两种形态、扩展名用图片头识别、
+  解不出来**不再静默**；补 3 个回归单测（裸 base64 必须落成文件）。
+  **规范：测试喂的形态必须等于生产者喂的形态** —— 否则「验过了」是假的。
 
 ---
 
