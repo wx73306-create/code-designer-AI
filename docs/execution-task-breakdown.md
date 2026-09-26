@@ -238,7 +238,7 @@ flowchart LR
 | P3-06 | [x] | Wxx | 2026-09-26 | 见 `docs/P3-06-animation-score-compatibility.md`：书面说明为何 `premium_score` **不能**改名为 `animation_score`（跨义合并），并给出动效实际被采集/归档的四层链路。本轮 QA 权重冻结，故不改分 |
 | P3-08 | [x] | Wxx | 2026-09-26 | `QaReport.problems` 保留模型原始 `severity`/`priority`/`reason`/`solution`（不压扁成 `{type,description}`），`dimension` 只做同义映射 |
 | P3-11 | [x] | Wxx | 2026-09-26 | `src/lib/visual-evaluation/report.ts` + `src/lib/qa-report.ts`：`runs/<jobId>/qa-report.json` + `qa-report.md`（人读）+ 一行 `[QA-REPORT]` 结构化日志。`trustworthy` 是一等字段 |
-| S-02 | [x] | Wxx | 2026-09-26 | `src/lib/schemas/` + `json-schema.ts` + `__fixtures__/substantive-package.json`；`npm run test:schema` 24 例、`npm run verify:schema` 产物级 11 项 |
+| S-02 | [x] | Wxx | 2026-09-26 | `src/lib/schemas/` + `json-schema.ts` + `__fixtures__/substantive-package.json`；`npm run test:schema` 27 例、`npm run verify:schema` **15/15**（含「undefined 等价于缺失」与「真实生产者 `buildWebsitePackage()` 输出过契约」两项） |
 | S-03 | [x] | Wxx | 2026-09-26 | `src/lib/run-artifacts.ts` 收敛「一个开关 + 一个根目录 + jobId 消毒 + 写文件原语」；`RUN_ARTIFACTS=on`（兼容旧 `PACKAGE_ARCHIVE`），默认 off |
 
 ### 2026-09-26 追加说明
@@ -250,6 +250,14 @@ flowchart LR
 - 明确**不做**（避免被当成漏项）：不改 QA 六维权重、不改指标字典名称、
   不删历史 `similarity` 字段、不合并 `visualFidelity`/`hierarchy`/`interaction` 到既有维度。
   理由见 `docs/P3-06-animation-score-compatibility.md`。
+- **部署验证抓出的生产级事故（已修，留档警示）**：契约闸门接入主链路后出现
+  「假违约 → 全量生成 422」。根因是校验器用 `'key' in obj` 判断字段存在性，
+  而生产者会**显式写入 `undefined`**，于是去对不存在的可选字段做类型检查，产出 11 条假违约；
+  fail-closed 闸门把假违约当硬拒绝，整个产品 0 可用。
+  `tsc` / vitest / `next build` 三绿都没拦住，因为 `verify:schema` 当时只校验**手写 fixture**。
+  已修：`undefined ≡ 缺失` + `verify:schema` 改为校验**真实生产者输出** + `PACKAGE_GATE=warn` 逃生阀 +
+  容器内 `/app/runs` 属主修正。
+  **规范：任何 fail-closed 闸门进主链路前，必须先拿真实生产者输出过一遍验收脚本。**
 
 ---
 
