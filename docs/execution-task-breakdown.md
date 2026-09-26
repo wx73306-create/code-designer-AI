@@ -227,9 +227,29 @@ flowchart LR
 |---------|------|--------|----------|------|
 | P1-01 | [ ] | | | |
 | P1-05 | [ ] | | | 现有 puppeteer-core 截图路径需评估去留 |
-| P1-10 | [ ] | | | 与 `WebsitePackage` TS 类型对齐 |
+| P1-06 | [x] | Wxx | 2026-09-26 | `element.json` 的 zIndex/层级信息已补齐（`layout-probe.ts` → `LayoutBlock.zIndex`，schema 1.3.0）。`auto` 记为**字段缺失**而非 0 —— auto 与 0 是两种层叠语义，折算等于编造测量值 |
+| P1-10 | [x] | Wxx | 2026-09-26 | 目录标准落地：`runs/<jobId>/website-package/{manifest.json,package.json,screenshots/,dom/,styles/,assets/,layout/,interaction/}`；`interaction/` 仅在真有内容时创建；截图 base64 拆成真实文件 |
+| P1-11 | [x] | Wxx | 2026-09-26 | `src/lib/schemas/website-package.schema.json`（draft 2020-12，闭集契约）+ `json-schema.ts` 零依赖校验器。未知关键字**报错而非静默通过** |
+| P1-14 | [x] | Wxx | 2026-09-26 | manifest 含 `sourceUrl` / `capturedAt` / `schemaVersion` / `toolVersions` / `jobId` / `counts`，两次采集可直接对表 |
 | P1-15 | [ ] | | | 决策：fork / 服务 / 内置 LLM |
-| P3-06 | [ ] | | | 指标对齐：animation_score vs premium_score |
+| P1-16 | [x] | Wxx | 2026-09-26 | `gatePackageForStep`：契约违约 → `ok:false`（`/api/mimo` code 步骤返回 422 `PACKAGE_CONTRACT_VIOLATION`）；合法但空包 → 放行 + 告警（不把空当非法） |
+| P1-18 | [x] | Wxx | 2026-09-26 | 每次 code 步骤打印「已注入数据包块: …」；`BLOCK_LABELS` 单点维护标签，杜绝两处标签不一致导致「看着注入了其实没有」 |
+| P2-03 | [x] | Wxx | 2026-09-26 | `src/lib/assets/`：零依赖图片头解析（PNG/JPEG/GIF/BMP/WebP/SVG）+ 本地化落盘 + manifest（宽高/类型/sha256）+ 防盗链重试（补 Referer）+ **占位策略**（403/超大/超时/软404 一律落本地占位 SVG）。`npm run verify:assets` 真 HTTP 验收 15/15 |
+| P3-06 | [x] | Wxx | 2026-09-26 | 见 `docs/P3-06-animation-score-compatibility.md`：书面说明为何 `premium_score` **不能**改名为 `animation_score`（跨义合并），并给出动效实际被采集/归档的四层链路。本轮 QA 权重冻结，故不改分 |
+| P3-08 | [x] | Wxx | 2026-09-26 | `QaReport.problems` 保留模型原始 `severity`/`priority`/`reason`/`solution`（不压扁成 `{type,description}`），`dimension` 只做同义映射 |
+| P3-11 | [x] | Wxx | 2026-09-26 | `src/lib/visual-evaluation/report.ts` + `src/lib/qa-report.ts`：`runs/<jobId>/qa-report.json` + `qa-report.md`（人读）+ 一行 `[QA-REPORT]` 结构化日志。`trustworthy` 是一等字段 |
+| S-02 | [x] | Wxx | 2026-09-26 | `src/lib/schemas/` + `json-schema.ts` + `__fixtures__/substantive-package.json`；`npm run test:schema` 24 例、`npm run verify:schema` 产物级 11 项 |
+| S-03 | [x] | Wxx | 2026-09-26 | `src/lib/run-artifacts.ts` 收敛「一个开关 + 一个根目录 + jobId 消毒 + 写文件原语」；`RUN_ARTIFACTS=on`（兼容旧 `PACKAGE_ARCHIVE`），默认 off |
+
+### 2026-09-26 追加说明
+
+- **本轮补的是「中间层只在内存里」这一个根因的四个下游缺口**：契约（P1-11/S-02）、
+  落盘（P1-10/P1-14/S-03）、强制消费（P1-16/P1-18）、产物（P2-03/P3-11）。
+- **P1-06 的 zIndex 与 P3-06/P3-08 是同一原则的两次应用**：宁可标「未知」，
+  也不填一个看起来合理但语义不同的值。
+- 明确**不做**（避免被当成漏项）：不改 QA 六维权重、不改指标字典名称、
+  不删历史 `similarity` 字段、不合并 `visualFidelity`/`hierarchy`/`interaction` 到既有维度。
+  理由见 `docs/P3-06-animation-score-compatibility.md`。
 
 ---
 

@@ -147,13 +147,23 @@ async function run(url: string, check: Target['check'], log: string[]) {
   const problems: string[] = [];
   if (!beforeOk) problems.push('未采集时 flow 不为空（应为 unknown）');
   if (flow.length === 0) problems.push('实测后 flow 仍为空');
-  if (sum > 100) problems.push(`heightWeight 之和 ${sum} > 100（容器嵌套重复计算）`);
+
+  // heightWeight 是**逐块各自四舍五入**到整数的（见 layout-probe.ts 的 Math.round），
+  // 因此 N 块之和在数学上最多可以到 100 + N/2 —— 那是舍入误差，不是 bug。
+  // 旧断言 `sum > 100` 会把这种误差判成「容器嵌套重复计算」，而线上真出过的那次
+  // 是 sum ≈ 200。所以把误差上限显式写成容差：既不误报，又仍抓得住真实的重复计算。
+  const roundingSlack = Math.ceil(flow.length / 2);
+  if (sum > 100 + roundingSlack) {
+    problems.push(
+      `heightWeight 之和 ${sum} > ${100 + roundingSlack}（超出 ${roundingSlack} 点舍入容差，疑似容器嵌套重复计算）`,
+    );
+  }
 
   const siteProblem = check(flow, probe);
   if (siteProblem) problems.push(siteProblem);
 
   if (problems.length === 0) {
-    say(`  ✅ PASS（占比之和 ${sum}）`);
+    say(`  ✅ PASS（占比之和 ${sum}，含 ${roundingSlack} 点舍入容差）`);
   } else {
     for (const p of problems) say(`  ❌ ${p}`);
   }
