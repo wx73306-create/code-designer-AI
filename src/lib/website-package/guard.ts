@@ -60,6 +60,27 @@ const BLOCK_LABELS: ReadonlyArray<readonly [string, string]> = Object.freeze([
  * @param pkg  待判定的包（`buildWebsitePackage()` 的输出，或来自缓存/JSON 的任意值）
  * @param step 消费步骤，仅用于日志前缀
  */
+/**
+ * 硬拒绝的运维逃生阀（2026-09-26 生产事故教训）。
+ *
+ * 事故经过：校验器有一个「把显式 `undefined` 当成存在」的缺陷，导致真实生产者
+ * 的输出被报出 11 处**假违约**；而 code 步骤是硬拒绝 —— 结果是**每一次生成都 422**，
+ * 整个产品停摆。修 bug 花了十分钟，但暴露了一个设计问题：
+ * **一个错误的契约判定可以把产品变成 0 可用，而现场没有任何解锁手段。**
+ *
+ * 所以保留 fail-closed 的默认行为（`enforce`），同时提供一个**显式、要打错字才能开**的
+ * 降级档：
+ *   · `PACKAGE_GATE=enforce`（默认）—— 违约即拒绝（422）
+ *   · `PACKAGE_GATE=warn`            —— 违约只记 error 日志并继续
+ *
+ * 为什么默认不改：违约确实意味着「在用坏数据喂模型」，静默继续会把代码缺陷
+ * 伪装成「生成质量不稳定」。所以降级必须是**人主动拧的开关**，且日志里必须刺眼。
+ * 用环境变量而不是配置项：要重启容器才能生效，避免被顺手打开后忘掉。
+ */
+export function isPackageGateDowngraded(): boolean {
+  return process.env.PACKAGE_GATE === 'warn';
+}
+
 export function gatePackageForStep(pkg: unknown, step: PackageGateStep): PackageGateResult {
   const health = inspectWebsitePackage(pkg);
 
@@ -73,6 +94,15 @@ export function gatePackageForStep(pkg: unknown, step: PackageGateStep): Package
     const reason =
       `数据包违反 WebsitePackage 契约（${health.errors.length} 处）—— 这是代码缺陷，` +
       `拒绝在损坏的输入上继续生成：\n${describeValidationErrors(health.errors)}`;
+    if (isPackageGateDowngraded()) {
+      // 降级档：仍然用 error 级别 + 显眼前缀，而且**不返回 ok:false**。
+      // 注意这里故意不把 reason 里的「拒绝」措辞改掉 —— 它是同一个判定结果，
+      // 只是处置方式不同；日志读起来应该让人一眼看出「本该拒绝，被开关放行了」。
+      console.error(
+        `[PackageGate:${step}] 🚨 PACKAGE_GATE=warn —— 本该拒绝但已放行（生产正在带伤运行）：\n${reason}`,
+      );
+      return { ok: true, health, reason, injectedBlocks };
+    }
     console.error(`[PackageGate:${step}] ${reason}`);
     return { ok: false, health, reason, injectedBlocks };
   }

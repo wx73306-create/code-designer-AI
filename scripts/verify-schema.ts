@@ -13,6 +13,7 @@
 // =====================================================================
 
 import { createEmptyPackage, WEBSITE_PACKAGE_VERSION } from '@/types/website-package';
+import { buildWebsitePackage } from '@/lib/website-package/adapter';
 import {
   describeValidationErrors,
   inspectWebsitePackage,
@@ -89,6 +90,112 @@ console.log('\n[4] 空壳体检（契约通过但没料 —— downstream 最该
 {
   const h = inspectWebsitePackage(substantiveFixture);
   check('样例包的 substantive=true', h.ok && h.substantive);
+}
+
+console.log('\n[5] 「未知」与「缺失」的判据：undefined 等价于缺失（2026-09-26 生产事故回归）');
+{
+  // 事故：生产者在构造对象时把取不到的字段显式赋成 undefined
+  // （`'key' in obj === true` 而 `obj.key === undefined`），旧校验器因此对
+  // 「本来就没有」的可选字段做类型检查，报出 11 处**假违约**；
+  // 而 code 步骤的契约闸门是硬拒绝 → 每一次生成都 422 失败。
+  type A = Record<string, unknown>;
+
+  const pkg: Record<string, unknown> = JSON.parse(JSON.stringify(substantiveFixture));
+  (pkg.assets as A[]).forEach((a) => {
+    a.hash = undefined;
+    a.width = undefined;
+    a.localPath = undefined;
+  });
+  (pkg.metadata as A).favicon = undefined;
+  (pkg.metadata as A).openGraph = undefined;
+  (pkg.metadata as A).canonical = undefined;
+  (pkg.animations as A[]).forEach((a) => {
+    a.properties = undefined;
+    a.delay = undefined;
+  });
+
+  const r = validateWebsitePackage(pkg);
+  check(
+    '缺省字段被显式赋成 undefined 时仍判定合法（undefined 不是 JSON 值）',
+    r.ok,
+    r.ok ? undefined : describeValidationErrors(r.errors),
+  );
+
+  // 反向：**必填**字段被显式赋成 undefined，必须算「缺失」而不是「存在」。
+  // 否则 `{ layout: undefined }` 会被当成「有 layout」，把缺字段放过去。
+  const missing: Record<string, unknown> = JSON.parse(JSON.stringify(substantiveFixture));
+  missing.layout = undefined;
+  const rMissing = validateWebsitePackage(missing);
+  check(
+    '必填字段被显式赋成 undefined 时判定为「缺失」（反向锁死）',
+    !rMissing.ok && rMissing.errors.some((e) => e.message.includes('layout')),
+    describeValidationErrors(rMissing.errors),
+  );
+}
+
+console.log('\n[6] 真实生产者：buildWebsitePackage 的输出必须过契约');
+{
+  // **这一条是事故的直接补丁。** 之前 verify:schema 只校验手写样例
+  // （__fixtures__），样例是按 schema 写的，所以永远绿 —— 而真实生产者
+  // 的输出从未被这道闸门看过一眼。契约与生产者一旦分叉，只有到线上才暴露。
+  const scraped = {
+    url: 'https://example.com',
+    title: 'Example — Official Site',
+    metaDescription: 'A short description.',
+    colors: [
+      { value: '#0a0a0a', context: 'text primary' },
+      { value: '#0071e3', context: 'primary button background' },
+      { value: '#f5f5f7', context: 'section background' },
+    ],
+    fonts: [
+      { family: 'Inter', weights: ['400', '700'], sizes: ['16px', '48px'] },
+      { family: 'SF Mono', weights: ['400'], sizes: ['14px'] },
+    ],
+    spacing: ['8px', '16px', '24px', '48px'],
+    borderRadius: ['8px', '12px'],
+    shadows: ['0 1px 3px rgba(0,0,0,0.1)'],
+    transitions: ['opacity 0.3s ease-in-out', 'all 0.2s linear'],
+    layoutHints: ['hero-centered', 'sticky-header'],
+    htmlStructure:
+      '<html lang="en"><head><link rel="canonical" href="https://example.com/"></head>'
+      + '<body><header class="site-header"><nav class="nav"></nav></header>'
+      + '<main><section class="hero"><img src="/hero.png"></section>'
+      + '<section class="features"></section></main><footer></footer></body></html>',
+    cssSnippet: ':root { --brand: #0071e3; } .grid { display: grid; gap: 24px; }',
+    externalCSSCount: 2,
+    inlineStyleCount: 5,
+  };
+
+  const produced = buildWebsitePackage({ scraped } as never);
+  const r = validateWebsitePackage(produced);
+  check(
+    '无采集时 buildWebsitePackage 的输出过契约',
+    r.ok,
+    r.ok ? undefined : describeValidationErrors(r.errors),
+  );
+
+  const withInteraction = buildWebsitePackage({
+    scraped,
+    interaction: {
+      scrolls: [{ trigger: 'load', type: 'reveal', target: '.hero', properties: ['opacity'] }],
+      clicks: [{ trigger: 'click', type: 'toggle', target: '.nav', properties: ['height'] }],
+      states: [{ trigger: 'hover', type: 'state', target: 'a', properties: ['color'] }],
+      animations: [{ name: 'fade', type: 'fade', duration: '0.3s', easing: 'ease', target: '.hero', properties: ['opacity'] }],
+      meta: { capturedAt: '2026-09-26T00:00:00.000Z', source: 'verify-schema' },
+    },
+  } as never);
+  const r2 = validateWebsitePackage(withInteraction);
+  check(
+    '带 interaction 的真实输出过契约',
+    r2.ok,
+    r2.ok ? undefined : describeValidationErrors(r2.errors),
+  );
+
+  check(
+    '真实输出同时是「有料」的（substantive）',
+    inspectWebsitePackage(produced).substantive,
+    inspectWebsitePackage(produced).emptyParts.join(', '),
+  );
 }
 
 console.log('\n' + '='.repeat(78));

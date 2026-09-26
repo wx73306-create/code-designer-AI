@@ -75,6 +75,16 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
+# 运行产物目录（S-03 / P1-10 / P3-11）：
+# `run-artifacts.ts` 默认往 `<cwd>/runs` 写数据包归档与 QA 报告。
+# 这里必须**预先建好并 chown 给 nextjs**，否则运行时会
+#   EACCES: permission denied, mkdir '/app/runs'
+# —— 2026-09-26 生产验证实测到的（/app 属于 root，进程是 nextjs）。
+# 建目录而不是改代码默认值：默认值 `<cwd>/runs` 是正确语义，
+# 缺的是「容器里 cwd 可写」这个前提。
+# 想写到宿主卷上时用 RUN_ARTIFACTS_DIR 指向挂载点即可。
+RUN mkdir -p /app/runs && chown nextjs:nodejs /app/runs
+
 USER nextjs
 
 EXPOSE 3000

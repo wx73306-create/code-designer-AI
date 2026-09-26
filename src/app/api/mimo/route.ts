@@ -1689,6 +1689,10 @@ export async function POST(request: NextRequest) {
             code: 'PACKAGE_CONTRACT_VIOLATION',
             step,
             details: codeGate.health.errors,
+            // 运维逃生阀提示：2026-09-26 的假违约事故里，硬拒绝让整个产品变成 0 可用，
+            // 而现场没有任何解锁手段（只能等改代码 + 重建镜像）。错误响应里带上这句话，
+            // 让值班的人 30 秒内知道有开关，而不是去猜。
+            hint: '若确认是契约与生产者不一致导致全场失败，可临时设 PACKAGE_GATE=warn 并重启容器放行（会打 error 级日志）；这是止损开关，不是修复。',
           },
           { status: 422 },
         );

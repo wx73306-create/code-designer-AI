@@ -246,3 +246,44 @@ describe('校验器自身的防退化', () => {
     expect(result.errors.some((e) => e.path === '$.components.tree[0].children[0].props.bad')).toBe(true);
   });
 });
+
+describe('「undefined 等价于缺失」（2026-09-26 生产事故回归）', () => {
+  // 事故：生产者在构造对象时把取不到的字段显式赋成 undefined。旧校验器用
+  // `key in obj` 判存在，于是对**本来就没有**的可选字段做类型检查，报出
+  // 「$ .animations[0].properties: type: 期望 array，实际 undefined」这类假违约。
+  // 而 code 步骤的契约闸门是硬拒绝 → 每一次生成都 422。
+  // 依据：JSON 里不存在 undefined，`JSON.stringify({a:undefined})` 就是 `{}`。
+  it('可选字段被显式置 undefined ⇒ 合法（不报 type 错）', () => {
+    const pkg = fixture();
+    type A = Record<string, unknown>;
+    (pkg.metadata as A).favicon = undefined;
+    (pkg.assets as A[]).forEach((a) => {
+      a.localPath = undefined;
+      a.hash = undefined;
+      a.width = undefined;
+    });
+    (pkg.animations as A[]).forEach((a) => {
+      a.properties = undefined;
+      a.delay = undefined;
+    });
+    expect(validateWebsitePackage(pkg).ok).toBe(true);
+  });
+
+  it('必填字段被显式置 undefined ⇒ 报「缺少必填字段」（不能算存在）', () => {
+    const pkg = fixture();
+    pkg.layout = undefined;
+    const result = validateWebsitePackage(pkg);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.errors.some((e) => e.message.includes('缺少必填字段 "layout"'))).toBe(true);
+  });
+
+  it('闭集契约：显式 undefined 的未声明字段不算「多出来的字段」', () => {
+    const pkg = fixture();
+    (pkg as Record<string, unknown>).debugDump = undefined;
+    expect(validateWebsitePackage(pkg).ok).toBe(true);
+    // 反面：有真值就必须拒
+    (pkg as Record<string, unknown>).debugDump = 1;
+    expect(validateWebsitePackage(pkg).ok).toBe(false);
+  });
+});

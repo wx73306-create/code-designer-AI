@@ -116,3 +116,75 @@ describe('packageForPrompt', () => {
     expect(text).toBe(pkg);
   });
 });
+
+describe('运维逃生阀 PACKAGE_GATE=warn（2026-09-26 假违约事故的教训）', () => {
+  // 事故：校验器把显式 undefined 当成「存在」，对真实生产者的输出报出 11 处假违约；
+  // 而 code 步骤是硬拒绝 —— 结果**每一次生成都 422**，产品变成 0 可用，
+  // 现场没有任何解锁手段。所以保留 fail-closed 默认值，另给一个要打错字才能开的降级档。
+  afterEach(() => {
+    delete process.env.PACKAGE_GATE;
+  });
+
+  it('默认（未设 PACKAGE_GATE）时违约仍然被拒 —— 默认必须是 fail-closed', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const bad = fixture();
+    delete bad.layout;
+    expect(gatePackageForStep(bad, 'code').ok).toBe(false);
+  });
+
+  it('PACKAGE_GATE=enforce 与未设置等价', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    process.env.PACKAGE_GATE = 'enforce';
+    const bad = fixture();
+    delete bad.layout;
+    expect(gatePackageForStep(bad, 'code').ok).toBe(false);
+  });
+
+  it('PACKAGE_GATE=warn 时放行，但日志必须是 error 级且写明「本该拒绝」（刺眼是设计目标）', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    process.env.PACKAGE_GATE = 'warn';
+    const bad = fixture();
+    delete bad.layout;
+
+    const gate = gatePackageForStep(bad, 'code');
+    expect(gate.ok).toBe(true);          // 放行
+    expect(gate.reason).toContain('拒绝'); // 判定结果本身没有被改写
+    const logged = spy.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(logged).toContain('PACKAGE_GATE=warn');
+    expect(logged).toContain('本该拒绝但已放行');
+  });
+
+  it('warn 档不影响「空壳包放行」与「正常包」的行为', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    process.env.PACKAGE_GATE = 'warn';
+    expect(gatePackageForStep(createEmptyPackage('https://e.com'), 'code').ok).toBe(true);
+    expect(gatePackageForStep(fixture(), 'code').ok).toBe(true);
+  });
+});
+
+describe('「undefined 等价于缺失」—— 假违约的直接回归', () => {
+  it('真实生产者风格的显式 undefined 不得被判成违约（否则 code 步骤全量 422）', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const pkg = fixture();
+    type A = Record<string, unknown>;
+    (pkg.metadata as A).favicon = undefined;
+    (pkg.metadata as A).canonical = undefined;
+    (pkg.metadata as A).openGraph = undefined;
+    (pkg.animations as A[]).forEach((a) => {
+      a.properties = undefined;
+      a.delay = undefined;
+    });
+
+    const gate = gatePackageForStep(pkg, 'code');
+    expect(gate.ok).toBe(true);
+    expect(gate.health.errors).toEqual([]);
+  });
+
+  it('反向：必填字段被显式置 undefined 仍要拒（不能把「缺字段」也一起放过）', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pkg = fixture();
+    pkg.layout = undefined;
+    expect(gatePackageForStep(pkg, 'code').ok).toBe(false);
+  });
+});

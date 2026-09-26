@@ -21,6 +21,21 @@
  * 设计原则：**宁可报错，不可漏判**。任何不认识的关关键词都会产出一条
  * `unsupported-keyword` 错误，避免 schema 作者以为自己写了一条约束、
  * 实际从未生效。
+ *
+ * ⚠️ **`undefined` 视同缺失**（2026-09-26 生产验证抓到）
+ * -------------------------------------------------------------------
+ * JSON 里不存在 `undefined`：`JSON.stringify({ a: undefined })` 就是 `{}`。
+ * 但本校验器跑在**活的 JS 对象**上，而生产者在构造对象时会把取不到的字段
+ * 显式赋成 `undefined`，于是 `'a' in obj === true` 而 `obj.a === undefined`。
+ *
+ * 旧实现因此对「本来就没有」的可选字段做类型检查，报出
+ * `$.animations[0].properties: type: 期望 array，实际 undefined` 这类**假违约** ——
+ * 而 code 步骤的契约闸门是**硬拒绝**，结果是**每一次生成都 422 失败**。
+ * 一个假违约把整个产品打挂了，这正是「宁可报错」原则的边界：
+ * 报错必须报**真的**错。
+ *
+ * 因此：判定「字段存在」一律用 `isPresent()`（`in` 且值不为 undefined），
+ * `required` 与 `properties` 都走它。
  */
 
 export interface SchemaError {
@@ -159,19 +174,26 @@ function validateNode(
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const obj = value as Record<string, unknown>;
 
+    /**
+     * 「字段存在」的唯一定义：键在对象里**且**值不是 `undefined`。
+     * `undefined` 不是 JSON 值，等价于缺失 —— 详见文件头 ⚠️ 段。
+     */
+    const isPresent = (k: string): boolean => k in obj && obj[k] !== undefined;
+
     if (Array.isArray(schema.required)) {
       for (const key of schema.required as string[]) {
-        if (!(key in obj)) errors.push({ path, message: `required: 缺少必填字段 "${key}"` });
+        if (!isPresent(key)) errors.push({ path, message: `required: 缺少必填字段 "${key}"` });
       }
     }
 
     const props = (schema.properties ?? {}) as Record<string, JsonSchema>;
     for (const [key, subSchema] of Object.entries(props)) {
-      if (key in obj) validateNode(obj[key], subSchema, root, `${path}.${key}`, errors);
+      if (isPresent(key)) validateNode(obj[key], subSchema, root, `${path}.${key}`, errors);
     }
 
     const declared = new Set(Object.keys(props));
-    const extras = Object.keys(obj).filter((k) => !declared.has(k));
+    // 显式赋成 undefined 的键不算「多出来的字段」（JSON 序列化后它会消失）
+    const extras = Object.keys(obj).filter((k) => !declared.has(k) && obj[k] !== undefined);
     if (schema.additionalProperties === false && extras.length > 0) {
       errors.push({
         path,
